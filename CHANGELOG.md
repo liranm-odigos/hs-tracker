@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.1.9 — 2026-09-06
+
+### Added
+
+- Eternity Codex and Infernal Codex take the announcement pillar. They have
+  their own switch on Alerts, next to the rarities, on by default.
+
+### Changed
+
+- Relics have their own announcement switch too, and are drawn orange.
+
 ## 1.1.8 — 2026-09-06
 
 ### Added
