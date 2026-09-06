@@ -1,6 +1,11 @@
 # Changelog
 
-## Unreleased
+## 1.1.8 — 2026-09-06
+
+### Added
+
+- Pushing a version tag cuts the GitHub Release from CI: Windows installer,
+  .deb, .rpm and AppImage, the same four upstream ships.
 
 ### Fixed
 

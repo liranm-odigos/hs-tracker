@@ -2265,7 +2265,7 @@ pub struct About {
     appimage: bool,
 }
 
-const REPO: &str = "https://github.com/Parazeya/hs-tracker";
+const REPO: &str = "https://github.com/liranm-odigos/hs-tracker";
 
 /// The front end's own errors. A panel that throws while rendering goes blank
 /// and says nothing; this is how it says something.
