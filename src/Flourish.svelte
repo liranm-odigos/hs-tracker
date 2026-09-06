@@ -20,9 +20,16 @@
     Unholy: '#e04a7a',
   };
   /// Same type the engine hunts by. Relics resolve to no journal rarity, so the
-  /// caption prints the type (see `rarityLabel`) and the pillar is tinted with
-  /// the Relic row's teal rather than the beige leftover of "Unknown".
+  /// caption prints the type (see `rarityLabel`) and the pillar is tinted
+  /// orange — the Relic row's colour, rather than the beige leftover of
+  /// "Unknown".
   const RELIC = 16;
+  /// Eternity Codex (11:18) and Infernal Codex (11:23). Common consumables, so
+  /// the rarity tint would be nothing; they wear manuscript bronze instead.
+  const CONSUMABLE = 11;
+  const CODEX_IDS = new Set([18, 23]);
+  const RELIC_TINT = '#f08a28';
+  const CODEX_TINT = '#d4a84b';
   /// How the entrance and the exit are timed. They are fixed lengths rather
   /// than a share of the run: stretched to a share, a longer setting would only
   /// make the thing fade in slowly, when what the player asked for is a longer
@@ -126,6 +133,13 @@
     }, runMs);
   }
 
+  function isCodex(entry) {
+    if (!entry) return false;
+    if (entry.item_type === CONSUMABLE && CODEX_IDS.has(entry.item_id)) return true;
+    const n = String(entry.name ?? '').trim().toLowerCase();
+    return n === 'eternity codex' || n === 'infernal codex';
+  }
+
   let isZone = $derived(drop?.kind === 'zone');
   /// What the plate lists, capped, with the overflow kept as a count rather
   /// than dropped silently.
@@ -137,8 +151,14 @@
   });
 
   let tint = $derived.by(() => {
-    if (drop?.item_type === RELIC) return '#7fd6c2';
+    if (drop?.item_type === RELIC) return RELIC_TINT;
+    if (isCodex(drop)) return CODEX_TINT;
     return RARITY_TINT[drop?.rarity] ?? '#f0e0b0';
+  });
+  let kind = $derived.by(() => {
+    if (!drop || drop.kind === 'zone') return '';
+    if (isCodex(drop)) return t('Codex');
+    return rarityLabel(drop.rarity, drop.item_type, drop.weapon_type);
   });
   let label = $derived.by(() => {
     if (!drop || drop.kind === 'zone') return '';
@@ -222,7 +242,7 @@
       <div class="sparks over"></div>
       {#if drop}
         <div class="caption">
-          <span class="rar">{rarityLabel(drop.rarity, drop.item_type, drop.weapon_type)}</span>
+          <span class="rar">{kind}</span>
           <span class="name">{label}</span>
           {#if drop.tier > 0}<span class="grade">{tierLabel(drop.tier)}</span>{/if}
         </div>
