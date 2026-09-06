@@ -9,6 +9,11 @@
   card; Discord's hover carries magic find too.
 - The overlay's satanic-zone chip holds four buffs, matching Statistics.
 
+### Changed
+
+- A release no longer compiles the crate twice on Windows. Tests run on Ubuntu
+  in parallel with the installer, and the installer uses thin LTO.
+
 ## 1.1.9 — 2026-09-06
 
 ### Added

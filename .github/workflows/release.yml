@@ -4,6 +4,12 @@ name: release
 # Release. This fork ships Windows only; the Linux packages stay with
 # upstream. workflow_dispatch still builds without publishing, so a branch
 # can be handed to a tester as an artifact without cutting a release.
+#
+# Tests do not run on the Windows job. Compiling the crate in debug for
+# `cargo test` and then again in release for the installer was the 4–5
+# minutes on top of a 7–10 minute `tauri build`. The suite runs here on
+# Ubuntu in parallel, and on every PR via ci.yml, so a red test still
+# blocks the GitHub Release without making the installer wait.
 on:
   push:
     tags:
@@ -18,6 +24,22 @@ env:
   TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
 
 jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          shared-key: linux-test
+
+      - run: sudo apt-get update && sudo apt-get install -y libpcap-dev
+
+      - run: cargo test --manifest-path src-tauri/Cargo.toml --locked
+
   build:
     runs-on: windows-latest
     steps:
@@ -30,9 +52,14 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
 
+      # Tag runs cannot see caches saved on other tags. shared-key keeps the
+      # prefix stable so a cache warmed on main (or a workflow_dispatch from
+      # main) is the one a tag restores. Without that, every release compiled
+      # from a cold target directory — "No cache found" on v1.1.8 and v1.1.9.
       - uses: swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
+          shared-key: windows-tauri
 
       # No `npm run build` here: tauri.conf.json's beforeBuildCommand runs it,
       # so every job was building the front end twice.
@@ -50,10 +77,6 @@ jobs:
 
       - run: node scripts/ci-prepare-signing.mjs
 
-      # the Npcap SDK import libraries are vendored, and wpcap.dll is
-      # delay-loaded, so no driver is needed on the runner
-      - run: cargo test --manifest-path src-tauri/Cargo.toml
-
       - run: npx tauri build
 
       - uses: actions/upload-artifact@v4
@@ -65,9 +88,10 @@ jobs:
 
   # Attach the installer to a GitHub Release named after the tag. Dispatch on
   # a branch only uploads the artifact; nothing here writes a release unless
-  # the run is for v*.
+  # the run is for v*. Waits for tests as well as the installer, so a red
+  # suite cannot ship.
   publish:
-    needs: [build]
+    needs: [test, build]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:

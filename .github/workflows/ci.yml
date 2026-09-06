@@ -1,0 +1,39 @@
+name: ci
+
+# Tests and the frontend build, on every PR and on main. The release workflow
+# used to compile the crate in debug for `cargo test` and then again in
+# release for the installer — about four extra minutes on Windows, every tag.
+# Those tests live here, on Ubuntu, where the same suite is a couple of minutes
+# with a cold cache and seconds with a warm one.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          shared-key: linux-test
+
+      - run: sudo apt-get update && sudo apt-get install -y libpcap-dev
+
+      - run: cargo test --manifest-path src-tauri/Cargo.toml --locked
+
+      - run: npm ci
+      - run: npm run build
