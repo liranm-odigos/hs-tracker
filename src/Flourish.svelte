@@ -19,6 +19,10 @@
     Angelic: '#f6f794',
     Unholy: '#e04a7a',
   };
+  /// Same type the engine hunts by. Relics resolve to no journal rarity, so the
+  /// caption prints the type (see `rarityLabel`) and the pillar is tinted with
+  /// the Relic row's teal rather than the beige leftover of "Unknown".
+  const RELIC = 16;
   /// How the entrance and the exit are timed. They are fixed lengths rather
   /// than a share of the run: stretched to a share, a longer setting would only
   /// make the thing fade in slowly, when what the player asked for is a longer
@@ -132,7 +136,10 @@
     return shown;
   });
 
-  let tint = $derived(RARITY_TINT[drop?.rarity] ?? '#f0e0b0');
+  let tint = $derived.by(() => {
+    if (drop?.item_type === RELIC) return '#7fd6c2';
+    return RARITY_TINT[drop?.rarity] ?? '#f0e0b0';
+  });
   let label = $derived.by(() => {
     if (!drop || drop.kind === 'zone') return '';
     if (drop.name) return nameOf(drop.name, drop.item_type, drop.item_id, drop.weapon_type);

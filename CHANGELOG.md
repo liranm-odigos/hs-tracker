@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Hunted relics and watchlisted keys, collectibles, runes and materials take
+  the announcement pillar, not only the chime.
+
 ## 1.1.7 — 2026-09-06
 
 ### Added

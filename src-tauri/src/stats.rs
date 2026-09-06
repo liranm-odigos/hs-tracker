@@ -1237,7 +1237,28 @@ impl GameStats {
     /// its own: the point of putting an item on a list is that it matters, and
     /// having to describe it a second time in rarity and grade switches is the
     /// kind of duplication that makes a filter look broken.
-    fn worth_a_flourish(&self, rarity: &str, tier: i64, listed: bool) -> bool {
+    ///
+    /// A hunted relic, and a resource a list named, never match those switches:
+    /// relics resolve to no journal rarity on purpose, and a key, collectible,
+    /// rune or vault is Common (or a vault colour the grid does not offer).
+    /// They chimed because the player named them, so the pillar follows that
+    /// same decision. Unlisted resources stay quiet — Angelic keys fall by the
+    /// handful, and ticking Angelic on the pillar must not light the screen
+    /// for every one.
+    fn worth_a_flourish(
+        &self,
+        rarity: &str,
+        tier: i64,
+        listed: bool,
+        relic: bool,
+        resource: bool,
+    ) -> bool {
+        if relic || (resource && listed) {
+            return true;
+        }
+        if resource {
+            return false;
+        }
         if self.prefs.fx_listed && listed {
             return true;
         }
@@ -1749,7 +1770,13 @@ impl GameStats {
                 let announce = *announced
                     || listed_hit
                     || (!is_resource && self.passes_filter(&rarity_key, tier));
-                let flourish = !is_resource && self.worth_a_flourish(&rarity_key, tier, listed_hit);
+                let flourish = self.worth_a_flourish(
+                    &rarity_key,
+                    tier,
+                    listed_hit,
+                    listed.as_deref() == Some("relic"),
+                    is_resource,
+                );
                 if wanted && (announce || flourish) {
                     // One item, one notification, whichever sighting got here
                     // first. The rule above says as much, but a list was
@@ -2479,6 +2506,7 @@ mod tests {
         let angelic = s.apply(&vault(5, "a")).expect("the one the list names");
         assert_eq!(angelic.rarity, "Angelic");
         assert_eq!(angelic.sound.as_deref(), Some("list-vault"));
+        assert!(angelic.flourish, "a listed vault takes the pillar: it is a container, so rarity alone never would");
         assert!(s.apply(&vault(0, "b")).is_none(), "the Superior one is another item");
 
         // the bare name still means any of them
@@ -4197,6 +4225,7 @@ mod tests {
         s.prefs.relics = vec![127];
         let hit = s.apply(&relic(127, "8b5bdb8ad9be", true)).expect("a hunted relic is announced");
         assert_eq!(hit.sound.as_deref(), Some("relic"), "and it chimes on its own key");
+        assert!(hit.flourish, "the Relic row promised the pillar, not only the chime");
         // The chime is not the whole alert: the drop feed is where a player
         // looks to see WHICH relic it was, and the entry carries no name, so
         // the windows read it off the identity. `item_name` is what they call.
@@ -4214,6 +4243,78 @@ mod tests {
         // one is not ticking the type.
         let other = s.apply(&relic(134, "cc808046c7c7", true));
         assert!(other.is_none_or(|d| d.sound.is_none()), "relic 134 was not ticked");
+    }
+
+    /// A collectible (and a key, rune, material, vault) is a resource: rarity
+    /// never chimes for one, and the flourish's rarity grid cannot either.
+    /// Putting it on a list is how it gets a sound; that has to be how it gets
+    /// the pillar too, or the announcement looks broken next to the chime.
+    #[test]
+    fn a_listed_collectible_takes_the_pillar() {
+        let card = |name: &str, hash: &str| GameEvent::ItemAdded {
+            rarity: Value::Null,
+            unscaled: false,
+            mf: false,
+            tier: 0,
+            item_type: 13,
+            item_id: 30,
+            weapon_type: 0,
+            seed: 1,
+            name: name.into(),
+            announced: false,
+            amount: 1,
+            fingerprint: format!("13-1-{hash}"),
+            hash: hash.into(),
+            ground: true,
+        };
+
+        let mut s = GameStats::default();
+        s.set_flourish_filter(vec!["Satanic".into(), "Angelic".into()], 1);
+        assert!(
+            s.apply(&card("Justice", "quiet")).is_none(),
+            "an unlisted tarot card is still not news, even with the pillar armed"
+        );
+
+        let mut s = GameStats::default();
+        s.set_sound_lists(vec![("list-codex".into(), vec!["Justice".into()])]);
+        let hit = s.apply(&card("Justice", "listed")).expect("on a list, so it is announced");
+        assert_eq!(hit.sound.as_deref(), Some("list-codex"));
+        assert!(hit.flourish, "and the pillar follows the list, not the rarity grid");
+    }
+
+    /// Ticking Angelic on the pillar must not light the screen for every
+    /// Angelic Key. Those fall by the handful; a list is how one of them is
+    /// asked for.
+    #[test]
+    fn an_unlisted_key_does_not_take_the_pillar() {
+        let mut s = GameStats::default();
+        s.set_flourish_filter(vec!["Angelic".into()], 1);
+        s.set_filter(vec!["Angelic".into()], 0);
+        assert!(
+            s.apply(&notable_item("Angelic Key", 12, 1)).is_none(),
+            "a resource is not a rarity find, on the pillar or the horn"
+        );
+
+        s.set_sound_lists(vec![("list-keys".into(), vec!["Angelic Key".into()])]);
+        let hit = s
+            .apply(&GameEvent::ItemAdded {
+                rarity: json!(7),
+                unscaled: false,
+                mf: false,
+                tier: 0,
+                item_type: 12,
+                item_id: 0,
+                weapon_type: 0,
+                seed: 0,
+                name: "Angelic Key".into(),
+                announced: false,
+                amount: 1,
+                fingerprint: "key-listed".into(),
+                hash: "key-listed".into(),
+                ground: true,
+            })
+            .expect("the list asked for this one");
+        assert!(hit.flourish, "named on a list, the key takes the pillar");
     }
 
     /// The relic pick is the OPPOSITE way round to the zone-buff pick above it

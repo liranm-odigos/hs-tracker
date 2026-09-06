@@ -618,6 +618,7 @@
               </button>
             {/each}
           </div>
+          <div class="note">{t("Hunted relics, and a key, rune or collectible a watchlist names, take the pillar too — they have no rarity on the switches above.")}</div>
           <div class="line">
             <span class="name">{t("Min Tier")}</span>
             <input type="range" min="1" max="6" bind:value={settings.flourish_tier} oninput={() => save()} />
