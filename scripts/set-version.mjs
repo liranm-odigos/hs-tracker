@@ -18,20 +18,10 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const SEMVER = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
 
 // The README lists the files a release carries, and a file's name carries the
-// version, so the list is written here rather than by hand. The names are the
-// bundlers' own — Tauri's NSIS installer, its .deb and its AppImage, and the
-// .rpm, whose name puts the packaging revision after the version.
-//
-// No count beside each file. Shields can only count an asset within one
-// release, so those four numbers were the current version's alone and read as
-// nought for the minutes between the tag going up and the release being cut.
-// The one badge above the table counts every download of every release, which
-// is the figure worth showing.
+// version, so the list is written here rather than by hand. This fork ships
+// the Windows installer only.
 const ASSETS = [
   ['Windows', (v) => `HS.Tracker_${v}_x64-setup.exe`],
-  ['Linux \u00b7 AppImage', (v) => `HS.Tracker_${v}_amd64.AppImage`],
-  ['Linux \u00b7 deb', (v) => `HS.Tracker_${v}_amd64.deb`],
-  ['Linux \u00b7 rpm', (v) => `HS.Tracker-${v}-1.x86_64.rpm`],
 ];
 
 /** The table between the `downloads` markers, for one version. */

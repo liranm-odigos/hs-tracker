@@ -80,12 +80,9 @@ npm run release              # Windows: installer in src-tauri/target/release/bu
 `tauri.conf.json` and `Cargo.toml` too, and `npm run release` runs that first, so
 the installer, the crate and the tag cannot disagree.
 
-On this fork, pushing a `v*` tag **does** publish. The workflow builds the four
-packages on GitHub-hosted runners and attaches them to a Release — the same
-Windows installer, .deb, .rpm and AppImage upstream ships. Upstream stopped
-doing that because they build on one machine (`npm run all` then
-`npm run publish`); a fork has no such machine, so the runners are the
-publisher here.
+On this fork, pushing a `v*` tag **does** publish. The workflow builds the
+Windows installer on a GitHub-hosted runner and attaches it to a Release.
+Linux packages stay with upstream.
 
 `workflow_dispatch` still builds without publishing, so a branch can be handed
 to a tester as artifacts without cutting a release.
@@ -102,10 +99,10 @@ git tag -a v1.1.8 -m 1.1.8
 git push origin main v1.1.8
 ```
 
-The `release` workflow builds on Windows, Ubuntu and Fedora and cuts the
-GitHub Release when it finishes. Auto-update signatures need a signing key in
-the repo secrets (`TAURI_SIGNING_PRIVATE_KEY`, optional
-`TAURI_SIGNING_PRIVATE_KEY_PASSWORD`); without it the installers still ship,
+The `release` workflow builds the Windows installer and cuts the GitHub
+Release when it finishes. Auto-update signatures need a signing key in the
+repo secrets (`TAURI_SIGNING_PRIVATE_KEY`, optional
+`TAURI_SIGNING_PRIVATE_KEY_PASSWORD`); without it the installer still ships,
 unsigned, and About falls back to the GitHub releases page.
 
 The original local path still works if you have the machine:

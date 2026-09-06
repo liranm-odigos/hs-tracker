@@ -1,10 +1,7 @@
 // CI: cut a GitHub Release from the artifacts the workflow just built.
 //
-// Upstream does this on the maintainer's machine (`npm run publish`) because
-// a hosted runner once spent an evening on a dead apt mirror. A fork has no
-// such machine, so the same four packages are attached here when a v* tag is
-// pushed — Windows installer, .deb, .rpm, AppImage — and latest.json when
-// anything was signed.
+// This fork ships the Windows installer only. latest.json is written when
+// that installer was signed.
 //
 //   node scripts/ci-publish.mjs              # reads release/
 //   node scripts/ci-publish.mjs --dry        # say what would happen
@@ -36,8 +33,9 @@ if (!existsSync(dir)) die('nothing in release/. The workflow copies the artifact
 const files = readdirSync(dir).filter((n) => n.includes(version));
 if (!files.length) die(`release/ holds nothing for ${version}`);
 
-const WANTED = ['.exe', '.deb', '.rpm', '.AppImage'];
+const WANTED = ['.exe'];
 const missing = WANTED.filter((ext) => !files.some((n) => n.endsWith(ext)));
+if (missing.length) die(`release/ is missing the Windows installer for ${version}`);
 
 const changelog = readFileSync(join(root, 'CHANGELOG.md'), 'utf8').split(/\r?\n/);
 const first = changelog.findIndex((l) => l.startsWith('## '));
@@ -51,7 +49,6 @@ if (!notes.includes(version)) {
 
 const TARGETS = [
   ['windows-x86_64', (n) => n.endsWith('-setup.exe')],
-  ['linux-x86_64', (n) => n.endsWith('.AppImage')],
 ];
 const slug = process.env.GITHUB_REPOSITORY || run('gh', ['repo', 'view', '--json', 'nameWithOwner', '-q', '.nameWithOwner']).trim();
 const platforms = {};
@@ -74,7 +71,6 @@ const manifestPath = join(dir, 'latest.json');
 
 console.log(`\n  ${tag}\n`);
 for (const name of files.sort()) console.log(`    ${name}`);
-if (missing.length) console.log(`\n    missing: ${missing.join(', ')}`);
 console.log(`\n    updates  ${Object.keys(platforms).join(', ') || 'nothing was signed'}`);
 if (unsigned.length) console.log(`    unsigned ${unsigned.join(', ')}`);
 console.log(`\n    notes    ${changelog[first].trim()}\n`);

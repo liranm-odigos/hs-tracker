@@ -10,7 +10,7 @@
 <h3 align="center">Approved by the developer of Hero Siege</h3>
 
 <p align="center">
-  <a href="../../releases"><b>➡️ Download for Windows &amp; Linux ⬅️</b></a>
+  <a href="../../releases"><b>➡️ Download for Windows ⬅️</b></a>
 </p>
 
 <p align="center">
@@ -25,18 +25,6 @@
   <tr>
     <td><b>Windows</b></td>
     <td><a href="../../releases/download/v1.1.8/HS.Tracker_1.1.8_x64-setup.exe">HS.Tracker_1.1.8_x64-setup.exe</a></td>
-  </tr>
-  <tr>
-    <td><b>Linux · AppImage</b></td>
-    <td><a href="../../releases/download/v1.1.8/HS.Tracker_1.1.8_amd64.AppImage">HS.Tracker_1.1.8_amd64.AppImage</a></td>
-  </tr>
-  <tr>
-    <td><b>Linux · deb</b></td>
-    <td><a href="../../releases/download/v1.1.8/HS.Tracker_1.1.8_amd64.deb">HS.Tracker_1.1.8_amd64.deb</a></td>
-  </tr>
-  <tr>
-    <td><b>Linux · rpm</b></td>
-    <td><a href="../../releases/download/v1.1.8/HS.Tracker-1.1.8-1.x86_64.rpm">HS.Tracker-1.1.8-1.x86_64.rpm</a></td>
   </tr>
 </table>
 <!-- /downloads -->

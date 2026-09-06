@@ -4,8 +4,7 @@
 
 ### Added
 
-- Pushing a version tag cuts the GitHub Release from CI: Windows installer,
-  .deb, .rpm and AppImage, the same four upstream ships.
+- Pushing a version tag cuts the GitHub Release from CI: the Windows installer.
 
 ### Fixed
 
