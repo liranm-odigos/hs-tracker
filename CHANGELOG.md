@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.1.10 — 2026-09-06
+
+### Added
+
+- Statistics names the uniques that roll better in the act you are in, not only
+  the satanic zone this hour. Magic find and the last-known room sit on the same
+  card; Discord's hover carries magic find too.
+- The overlay's satanic-zone chip holds four buffs, matching Statistics.
+
 ## 1.1.9 — 2026-09-06
 
 ### Added
