@@ -155,8 +155,10 @@
   const tallied = (group) =>
     (snap?.tallies ?? []).reduce((n, t) => (t.group === group ? n + t.total : n), 0);
 
+  // Four, matching Statistics: a rotation can carry five, three hid the last
+  // one that was worth reading (Relic Keepers, Aftermath, Goblin's Greed).
   let buffs = $derived(
-    Array.from({ length: 3 }, (_, i) => {
+    Array.from({ length: 4 }, (_, i) => {
       const id = snap?.satanic_zone?.buffs?.[i];
       return id == null ? null : buffInfo(id);
     })
@@ -730,7 +732,7 @@
   .dot.warn { background: #e0b040; }
   .dot.err { background: #d04040; }
 
-  .chip.buffs { gap: 10px; justify-content: center; }
+  .chip.buffs { gap: 8px; justify-content: center; }
   .buff { width: 21px; height: 21px; }
 
   .zone {

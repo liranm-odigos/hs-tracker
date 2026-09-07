@@ -201,15 +201,25 @@ fn build(app: &AppHandle) -> Card {
     let state = if haul.is_empty() { crate::say::say("just started") } else { haul.join(" · ") };
 
     // the character's own progress, kept for the tooltip: the two visible lines
-    // belong to the run
+    // belong to the run. Magic find is the town heartbeat's figure, held through
+    // an act — the same number the Statistics clock already shows.
     let hover = match &snap.character {
-        Some(c) => format!(
-            "HS Tracker · {} {} · {} {}",
-            crate::say::say("level"),
-            c.level,
-            crate::say::say("hero level"),
-            c.herolevel,
-        ),
+        Some(c) => {
+            let mut line = format!(
+                "HS Tracker · {} {} · {} {}",
+                crate::say::say("level"),
+                c.level,
+                crate::say::say("hero level"),
+                c.herolevel,
+            );
+            if snap.mf > 0 {
+                line.push_str(" · ");
+                line.push_str(&crate::say::say("MF"));
+                line.push(' ');
+                line.push_str(&snap.mf.to_string());
+            }
+            line
+        }
         None => "HS Tracker".to_string(),
     };
 

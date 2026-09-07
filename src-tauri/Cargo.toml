@@ -1,6 +1,6 @@
 [package]
 name = "hs-tracker"
-version = "1.1.7"
+version = "1.1.10"
 description = "HS Tracker — Hero Siege session tracker overlay"
 # What the packages print. Without it the RPM header says "License: Unspecified"
 # for a repository that has carried a LICENSE file all along, and a distribution
@@ -53,7 +53,11 @@ winreg = "0.52"
 
 [profile.release]
 opt-level = "s"
-lto = true
+# Full LTO serialises the Windows MSVC link: v1.1.9 spent seven minutes in
+# `tauri build` on GitHub's runners, most of it rustc. Thin LTO still folds
+# crates together; the NSIS package is dominated by WebView2 and the frontend,
+# so the extra minutes were not buying a smaller installer anyone would notice.
+lto = "thin"
 strip = true
 
 [lints.rust]

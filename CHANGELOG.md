@@ -1,5 +1,41 @@
 # Changelog
 
+## 1.1.10 — 2026-09-07
+
+### Added
+
+- Statistics names the uniques that roll better in the act you are in, not only
+  the satanic zone this hour. Magic find and the last-known room sit on the same
+  card; Discord's hover carries magic find too.
+- The overlay's satanic-zone chip holds four buffs, matching Statistics.
+
+### Changed
+
+- A release no longer compiles the crate twice on Windows. Tests run on Ubuntu
+  in parallel with the installer, and the installer uses thin LTO.
+
+## 1.1.9 — 2026-09-06
+
+### Added
+
+- Eternity Codex and Infernal Codex take the announcement pillar. They have
+  their own switch on Alerts, next to the rarities, on by default.
+
+### Changed
+
+- Relics have their own announcement switch too, and are drawn orange.
+
+## 1.1.8 — 2026-09-06
+
+### Added
+
+- Pushing a version tag cuts the GitHub Release from CI: the Windows installer.
+
+### Fixed
+
+- Hunted relics and watchlisted keys, collectibles, runes and materials take
+  the announcement pillar, not only the chime.
+
 ## 1.1.7 — 2026-09-06
 
 ### Added

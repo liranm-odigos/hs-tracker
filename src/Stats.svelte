@@ -7,7 +7,7 @@
   import { listen } from './bridge.js';
   import { buffInfo, debuffInfo, zoneAct, zoneName } from './buffs.js';
   import { ITEMS, DROP_CHASE, DROP_PLACES, DROP_RATE, DROP_ZONES, RARITY_BY_NAME, TIER_BY_NAME, rarityByName, tierLabel, zoneCode } from './items.js';
-  import { itemName, language, locale, nameOf, placeList, satanicZoneName, say, t, typeLabel } from './say.svelte.js';
+  import { itemName, language, locale, nameOf, placeList, satanicZoneName, say, t, typeLabel, zoneLabel } from './say.svelte.js';
   import { fmt, difficulty, RARITIES, RARITY_CLASS } from './format.js';
 
   // The four counters the backend keeps, and what to call them. Every resource
@@ -106,6 +106,9 @@
     if (c.name) parts.push(c.name);
     parts.push(`${t('Lv')} ${c.level}`, `${t('HLv')} ${c.herolevel}`, difficulty(c.difficulty, c.hell_sub));
     if (c.hardcore) parts.push(t('HC'));
+    // Last magic find the town heartbeat stated. The act heartbeat does not
+    // carry it, so the figure is held — and it does not move in an act anyway.
+    if (snap?.mf) parts.push(`${t('MF')} ${snap.mf}`);
     return parts.join(' · ');
   });
 
@@ -362,20 +365,28 @@
   const byWorth = (a, b) => b.tier - a.tier || a.rate - b.rate;
   const pick = (want) => TIED.filter(({ codes }) => codes.some(want)).map(({ key }) => detail(key)).sort(byWorth);
 
-  // The satanic zone, not the room the player is standing in.
+  // The satanic zone, and the act the character save last stated.
   //
-  // Where the player is standing is the one thing the game will not say. The
-  // room appears only in the game's own state packet — since the August 2026
-  // patch about twenty times rarer than it was, and mostly while the map is
-  // open — and nothing else on the wire carries it: not the save's fields, not
-  // the drop packets, not the market, not the chat. A list built on it sits for
-  // hours on a zone the player has left.
+  // The room itself appears only in the game's own state packet — since the
+  // August 2026 patch about twenty times rarer than it was, and mostly while
+  // the map is open — so a list built on it sits for hours on a zone the
+  // player has left. The act arrives with every save. The satanic zone is
+  // announced by name, over and over, because every client has to agree on it.
   //
-  // The satanic zone is the opposite: the server announces it by name, over and
-  // over, because every client has to agree on it. It is also the zone worth
-  // reading a drop list for.
+  // Two lists, then: what rolls better in the rotation this hour, and what
+  // rolls better in the act you are actually in. The room, when we have it, is
+  // a label — not a filter.
   let szCode = $derived(zoneCode(snap?.satanic_zone?.zone));
   let here = $derived(szCode ? pick((c) => c === szCode) : []);
+  let actHere = $derived(snap?.act ? pick((c) => c.startsWith(`${snap.act}-`)) : []);
+  // The act list minus whatever the satanic-zone list already named, so the
+  // two can sit one under the other without the same item twice.
+  let actExtra = $derived.by(() => {
+    if (!actHere.length) return [];
+    const named = new Set(here.map((it) => it.name));
+    return named.size ? actHere.filter((it) => !named.has(it.name)) : actHere;
+  });
+  let standing = $derived(snap?.room ? zoneLabel(snap.room) : '');
 
   // The game says outright when the character is standing in the satanic zone,
   // but that flag rides the same scarce heartbeat the room did — so it is held
@@ -669,7 +680,7 @@
 
     <div class="box" style:border-image-source="url({art('chip_dark')})">
       <div class="box-head">
-        <span class="accent">{t("Drops in the Satanic Zone")}</span>
+        <span class="accent">{szHere || !actExtra.length ? t("Drops in the Satanic Zone") : say('Drops in Act {n}', { n: snap.act })}</span>
         {#if zoneStale}
           <span class="stale" title="{t('this list is for the zone last confirmed at')} {zoneSeen}; {t('the rotation has come round since')}"> {t("unconfirmed")} </span>
         {/if}
@@ -678,20 +689,13 @@
         {/if}
         <span class="right" title={t("the zone the server is running satanic this hour")}>
           {#if snap?.satanic_zone}{satanicZoneName(snap.satanic_zone.zone, zoneName(snap.satanic_zone.zone))}
+          {:else if snap?.act}{t('Act')} {snap.act}
           {:else}{t('waiting for the game')}{/if}
         </span>
       </div>
-      <div class="vitals">
-        <span class="dim">{t("Level")}</span>
-        <b>{snap?.character?.level || '—'}</b>
-        <span class="dim">{t("Hero")}</span>
-        <b>{snap?.character?.herolevel || '—'}</b>
-        <span class="dim" title={t("the act the character save last stated — the game no longer names the zone often enough to show one")}>{t("Act")}</span>
-        <b>{snap?.act || '—'}</b>
-      </div>
-      {#if here.length}
+      {#snippet tiedList(items)}
         <div class="tied">
-          {#each here as it}
+          {#each items as it}
             <div class="drop">
               <span class="name {rarityCls[it.rarity] ?? ''}" title={it.hint}>{nameOf(it.name)}</span>
               <span class="dim tier">{tierLabel(it.tier)}</span>
@@ -699,12 +703,39 @@
             </div>
           {/each}
         </div>
-      {:else}
+      {/snippet}
+      <div class="vitals">
+        <span class="dim">{t("Level")}</span>
+        <b>{snap?.character?.level || '—'}</b>
+        <span class="dim">{t("Hero")}</span>
+        <b>{snap?.character?.herolevel || '—'}</b>
+        <span class="dim" title={t("the act the character save last stated — the game no longer names the zone often enough to show one")}>{t("Act")}</span>
+        <b>{snap?.act || '—'}</b>
+        <span class="dim" title={t("last magic find the town heartbeat stated — it does not change in an act")}>{t("MF")}</span>
+        <b class="c-blue">{snap?.mf || '—'}</b>
+        {#if standing}
+          <span class="dim" title={t("the last room the heartbeat named — it is only sent occasionally")}>{t("Room")}</span>
+          <b class="zone" title={snap.room}>{standing}</b>
+        {/if}
+      </div>
+      {#if !szHere && actExtra.length}
+        {@render tiedList(actExtra)}
+      {/if}
+      {#if here.length}
+        {#if !szHere && actExtra.length}
+          <div class="subhead">{t("Drops in the Satanic Zone")}</div>
+        {/if}
+        {@render tiedList(here)}
+      {:else if szHere || !actExtra.length}
         <div class="dim empty">
           {szCode
             ? t('nothing rolls better there than it does anywhere else')
             : t('the zone appears once the game announces it')}
         </div>
+      {/if}
+      {#if szHere && actExtra.length}
+        <div class="subhead">{t("Also in this act")}</div>
+        {@render tiedList(actExtra)}
       {/if}
     </div>
 
@@ -1139,6 +1170,7 @@
   .c-ble { color: var(--bone-14); }
   .vitals {
     display: flex;
+    flex-wrap: wrap;
     align-items: baseline;
     gap: 6px;
     padding: 4px 2px 2px;
