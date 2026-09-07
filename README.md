@@ -24,7 +24,7 @@
 <table align="center">
   <tr>
     <td><b>Windows</b></td>
-    <td><a href="../../releases/download/v1.1.9/HS.Tracker_1.1.9_x64-setup.exe">HS.Tracker_1.1.9_x64-setup.exe</a></td>
+    <td><a href="../../releases/download/v1.1.10/HS.Tracker_1.1.10_x64-setup.exe">HS.Tracker_1.1.10_x64-setup.exe</a></td>
   </tr>
 </table>
 <!-- /downloads -->
