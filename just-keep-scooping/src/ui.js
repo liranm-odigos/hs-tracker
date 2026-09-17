@@ -79,6 +79,7 @@ export function mount(root, game) {
           <div class="ground"></div>
           <div class="neon" data-neon>EAT HERE OR ELSE</div>
           <div class="combo" data-combo>x1 COMBO</div>
+          <div class="big-coins" data-big-coins>0¢</div>
           <div class="buffs" data-buffs></div>
           <div class="raccoon" data-raccoon>${RACCOON_SVG}</div>
           <div class="dumpster" data-dumpster>
@@ -337,6 +338,7 @@ export function mount(root, game) {
     if (shownCoins < s.coins) shownCoins = Math.min(s.coins, shownCoins + speed * (dt / 1000));
     else shownCoins = s.coins;
     $('[data-hud="coins"]').innerHTML = `💰 <b>${formatCoins(Math.floor(shownCoins))}</b>`;
+    $('[data-big-coins]').textContent = formatCoins(Math.floor(shownCoins));
     const cap = s.derived.capacity;
     const bagChip = $('[data-hud="bag"]');
     bagChip.textContent = `🎒 ${s.bag.length}/${cap}`;
