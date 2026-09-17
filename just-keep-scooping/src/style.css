@@ -344,7 +344,7 @@ button { cursor: pointer; }
   transform: translateX(-50%);
   display: flex;
   gap: 10px;
-  z-index: 5;
+  z-index: 8;
 }
 .btn {
   border: 0;
@@ -551,7 +551,8 @@ button { cursor: pointer; }
   place-items: center;
   padding: 24px;
 }
-.overlay.hidden { display: none; }
+.overlay.hidden { display: none; pointer-events: none; }
+.scheme.hidden { display: none; pointer-events: none; }
 .title-card, .modal {
   max-width: 560px;
   text-align: center;
@@ -787,7 +788,7 @@ button { cursor: pointer; }
   grid-template-rows: auto 1fr auto;
   color: var(--ink);
 }
-.scheme.hidden { display: none; }
+.scheme.hidden { display: none; pointer-events: none; }
 .scheme-bar {
   display: flex;
   justify-content: space-between;

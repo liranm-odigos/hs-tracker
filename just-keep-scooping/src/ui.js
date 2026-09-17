@@ -362,10 +362,10 @@ export function mount(root, game) {
     $('[data-cat]').hidden = Date.now() > s.catUntil;
     $('[data-possum]').hidden = !s.possumBlocking;
     raccoon.classList.toggle('sad', s.bag.length >= cap);
-    $('[data-flies]').classList.toggle('on', Boolean(s.derived.flies) || Boolean(s.derived.fx?.flies));
-    const internN = Math.min(4, s.derived.intern || 0);
+    $('[data-flies]')?.classList.toggle('on', Boolean(s.derived?.fx?.flies));
+    const internN = Math.min(4, s.derived?.intern || 0);
     const internBox = $('[data-interns]');
-    if (internBox.childElementCount !== internN) {
+    if (internBox && internBox.childElementCount !== internN) {
       internBox.innerHTML = Array.from({ length: internN }, () => '<div class="mini">🦝</div>').join('');
     }
     const buffHtml = s.buffs
