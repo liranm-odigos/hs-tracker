@@ -61,5 +61,6 @@ Install script: none required if you upload the folder. If you prefer the NSIS i
 - Steam Cloud for `localStorage` / a JSON save in `%APPDATA%`
 - Steam achievements hooked to the in-game trophy ids
 - Linux / Steam Deck build (WebView2 + Proton is shaky; a Linux Tauri bundle is the right Deck path)
+- macOS is playable today (`npm run dev` in a browser, or `npm run desktop` / `npm run macos` for a native `.app`). It is not part of the first Steam depot.
 
 None of those block a first Windows depot.

@@ -395,7 +395,7 @@ export function mount(root, game) {
         <p>Scoop the dumpster. Fill the bag. Sell to Uncle Gary. Open <b>THE SCHEME</b> and spend — every buy lights a new branch of worse ideas.</p>
         <p>Bottlecaps buy the next dumpster. Interns scoop while you plot. At the end of the line, incorporate for infamy.</p>
         <p>Pet the cat. Kick the possum. This is legally a workplace.</p>
-        <p><b>Space</b> scoop · <b>S</b> sell · <b>T</b> scheme · <b>M</b> mute · <b>F11</b> fullscreen</p>
+        <p><b>Space</b> scoop · <b>S</b> sell · <b>T</b> scheme · <b>M</b> mute · <b>F11</b> / <b>Ctrl+⌘+F</b> fullscreen</p>
         <div class="footer-btns"><button class="btn" data-close>Close</button></div>`;
     }
     modalWrap.classList.remove('hidden');
@@ -527,7 +527,7 @@ export function mount(root, game) {
       if (scheme.isOpen()) return;
       doSell();
     }
-    if (e.key === 'F11') {
+    if (e.key === 'F11' || (e.key.toLowerCase() === 'f' && e.metaKey && e.ctrlKey)) {
       e.preventDefault();
       if (!document.fullscreenElement) document.documentElement.requestFullscreen?.();
       else document.exitFullscreen?.();

@@ -11,7 +11,8 @@
     "test": "node --test test/*.test.js",
     "tauri": "tauri",
     "desktop": "tauri dev",
-    "windows": "tauri build --bundles nsis"
+    "windows": "tauri build --bundles nsis",
+    "macos": "tauri build --bundles app,dmg"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.11.4",
