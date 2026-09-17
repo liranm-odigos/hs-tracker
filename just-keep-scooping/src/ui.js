@@ -551,12 +551,15 @@ export function mount(root, game) {
 
   setInterval(() => {
     if (!game.state.started || scheme.isOpen()) return;
-    if (raccoon.classList.contains('scooping') || raccoon.classList.contains('sad')) return;
+    if (!raccoon || raccoon.classList.contains('scooping') || raccoon.classList.contains('sad')) return;
     raccoon.classList.remove('scratch');
     void raccoon.offsetWidth;
     raccoon.classList.add('scratch');
     setTimeout(() => raccoon.classList.remove('scratch'), 700);
   }, 9000);
+
+  renderSide();
+  let last = performance.now();
   let shopTimer = 0;
   function frame(now) {
     const dt = Math.min(200, now - last);
