@@ -1,5 +1,8 @@
 import { ACHIEVEMENTS, BUFFS, LOCATIONS, NEWS, TRASH } from './data.js';
 import { formatCoins } from './format.js';
+import { CAT_SVG, GARY_SVG, POSSUM_SVG, RACCOON_SVG } from './actors.js';
+import { createScheme } from './tree-ui.js';
+import { affordableTreeCount } from './tree.js';
 import {
   buySound,
   coinSound,
@@ -18,35 +21,8 @@ import {
   nextLocation,
   prestigeGain,
   shopItems,
+  travelCostNow,
 } from './game.js';
-
-const RACCOON_SVG = `
-<svg viewBox="0 0 160 160" aria-hidden="true">
-  <ellipse cx="80" cy="138" rx="46" ry="12" fill="#000" opacity=".25"/>
-  <ellipse cx="80" cy="108" rx="42" ry="36" fill="#6b5848"/>
-  <ellipse cx="80" cy="118" rx="28" ry="16" fill="#cbb7a0"/>
-  <rect x="74" y="112" width="12" height="26" rx="3" fill="#2a1c10"/>
-  <rect x="72" y="112" width="16" height="8" rx="2" fill="#ffd166"/>
-  <circle cx="80" cy="62" r="32" fill="#6b5848"/>
-  <ellipse cx="56" cy="40" rx="14" ry="16" fill="#6b5848"/>
-  <ellipse cx="104" cy="40" rx="14" ry="16" fill="#6b5848"/>
-  <ellipse cx="56" cy="40" rx="8" ry="10" fill="#2a2430"/>
-  <ellipse cx="104" cy="40" rx="8" ry="10" fill="#2a2430"/>
-  <ellipse cx="64" cy="62" rx="16" ry="12" fill="#2a2430"/>
-  <ellipse cx="96" cy="62" rx="16" ry="12" fill="#2a2430"/>
-  <circle cx="68" cy="62" r="5" fill="#f7f1e8"/>
-  <circle cx="92" cy="62" r="5" fill="#f7f1e8"/>
-  <circle cx="69" cy="63" r="2.2" fill="#1a1224"/>
-  <circle cx="93" cy="63" r="2.2" fill="#1a1224"/>
-  <ellipse cx="80" cy="74" rx="6" ry="4" fill="#1a1224"/>
-  <path d="M74 80 Q80 86 86 80" fill="none" stroke="#1a1224" stroke-width="2"/>
-  <ellipse cx="48" cy="108" rx="14" ry="10" fill="#6b5848"/>
-  <ellipse cx="112" cy="108" rx="14" ry="10" fill="#6b5848"/>
-  <ellipse cx="48" cy="108" rx="8" ry="6" fill="#cbb7a0"/>
-  <ellipse cx="112" cy="108" rx="8" ry="6" fill="#cbb7a0"/>
-  <ellipse cx="70" cy="140" rx="10" ry="7" fill="#2a2430"/>
-  <ellipse cx="94" cy="140" rx="10" ry="7" fill="#2a2430"/>
-</svg>`;
 
 function el(html) {
   const t = document.createElement('template');
@@ -86,12 +62,14 @@ export function mount(root, game) {
             <div class="lid"><div class="lid-handle"></div></div>
             <div class="dump-body"></div>
           </div>
-          <div class="gary" data-gary title="Sell to Uncle Gary">
-            <div class="gary-art">🦝</div>
+          <div class="flies" data-flies><span></span><span></span><span></span></div>
+          <div class="interns" data-interns></div>
+          <div class="gary idle" data-gary title="Sell to Uncle Gary">
+            ${GARY_SVG}
             <div class="gary-label">UNCLE GARY</div>
           </div>
-          <div class="cat" data-cat hidden>🐱</div>
-          <div class="possum" data-possum hidden>😾</div>
+          <div class="cat" data-cat hidden>${CAT_SVG}</div>
+          <div class="possum" data-possum hidden>${POSSUM_SVG}</div>
           <div class="fx" data-fx></div>
           <div class="bag-meter" data-meter><span></span></div>
           <div class="stage-actions">
@@ -109,7 +87,7 @@ export function mount(root, game) {
         <p>A tiny incremental about turning dumpsters into a criminal empire.</p>
         <p>You are Scoop. You have paws. Uncle Gary has coins. The rest is capitalism.</p>
         <button class="btn scoop" data-start>I HAVE PAWS</button>
-        <div class="help">Space to scoop · S to sell · M to mute</div>
+        <div class="help">Space scoop · S sell · T the scheme · M mute</div>
         <div class="footer-btns" style="justify-content:center;margin-top:16px">
           <button class="linkish" data-continue hidden>Keep scooping</button>
         </div>
@@ -133,6 +111,22 @@ export function mount(root, game) {
   const modal = $('[data-modal]');
   const startBtn = $('[data-start]');
   const continueBtn = $('[data-continue]');
+  const possumEl = $('[data-possum]');
+  const catEl = $('[data-cat]');
+
+  const scheme = createScheme(root, game, {
+    onBuy(r) {
+      if (r.ok) {
+        buySound();
+        toast('Scheme upgraded', r.node?.name || 'The tiny tie tightens.');
+        if (r.opened?.length) {
+          toast('Branch unlocked', r.opened.map((n) => n.name).join(', '));
+        }
+        for (const a of r.unlocked || []) toast('🏆 ' + a.name, a.desc);
+        renderSide(true);
+      } else denySound();
+    },
+  });
 
   let shownCoins = game.state.coins;
   let scoopLock = false;
@@ -161,7 +155,9 @@ export function mount(root, game) {
     void raccoon.offsetWidth;
     raccoon.classList.add('scooping');
     dumpster.classList.add('open');
-    setTimeout(() => dumpster.classList.remove('open'), 220);
+    setTimeout(() => dumpster.classList.remove('open'), 280);
+    raccoon.classList.add('wow');
+    setTimeout(() => raccoon.classList.remove('wow'), 500);
     const box = dumpster.getBoundingClientRect();
     const stageBox = stage.getBoundingClientRect();
     const x = box.left - stageBox.left + box.width * 0.45;
@@ -176,6 +172,8 @@ export function mount(root, game) {
     }
     const rare = (result.items || []).find((i) => ['rare', 'epic', 'legendary', 'mythic'].includes(i.rarity));
     if (rare) {
+      dumpster.classList.add('rareflash');
+      setTimeout(() => dumpster.classList.remove('rareflash'), 600);
       spawnFx(`<div class="splash r-${rare.rarity}">${rare.icon} ${rare.name}!</div>`, stage.clientWidth / 2, 80);
     }
     const top = result.items?.[0];
@@ -213,9 +211,16 @@ export function mount(root, game) {
       return;
     }
     coinSound();
-    $('[data-gary]').classList.remove('pay');
+    $('[data-gary]').classList.remove('pay', 'idle');
     void $('[data-gary]').offsetWidth;
     $('[data-gary]').classList.add('pay');
+    setTimeout(() => $('[data-gary]').classList.add('idle'), 450);
+    if (game.state.derived?.dance) {
+      raccoon.classList.remove('dance');
+      void raccoon.offsetWidth;
+      raccoon.classList.add('dance');
+      setTimeout(() => raccoon.classList.remove('dance'), 1800);
+    }
     raccoon.classList.remove('sad');
     $('[data-scoop]').classList.remove('pulse');
     $('[data-sell]').classList.remove('pulse');
@@ -236,8 +241,8 @@ export function mount(root, game) {
       s.bag.length,
       s.bottlecaps,
       s.locationIndex,
-      JSON.stringify(s.upgrades),
-      JSON.stringify(s.crew),
+      JSON.stringify(s.tree),
+      s.spent,
       s.log[0] || '',
       s.muted,
       s.achievements.length,
@@ -258,10 +263,6 @@ export function mount(root, game) {
       .filter((x) => x.visible)
       .map((x) => shopCard(x))
       .join('');
-    const crew = shop.crew
-      .filter((x) => x.visible)
-      .map((x) => shopCard(x))
-      .join('');
 
     let travel = '';
     if (next) {
@@ -271,7 +272,7 @@ export function mount(root, game) {
           <h3>🚌 Next dumpster: ${next.name}</h3>
           <p>${next.blurb}</p>
           <div class="bar"><span style="width:${Math.round(capsProgress(s) * 100)}%"></span></div>
-          <p>Bottlecaps ${Math.min(s.bottlecaps, next.capsNeeded)}/${next.capsNeeded} · ticket ${formatCoins(next.travelCost)}</p>
+          <p>Bottlecaps ${Math.min(s.bottlecaps, next.capsNeeded)}/${next.capsNeeded} · ticket ${formatCoins(travelCostNow(s))}</p>
           <button class="btn ${ready ? 'pulse' : ''}" data-travel ${ready ? '' : 'disabled'}>TAKE THE BUS</button>
         </div>`;
     } else {
@@ -289,14 +290,14 @@ export function mount(root, game) {
         </div>`;
     }
 
+    const readyTree = affordableTreeCount(s);
     side.innerHTML = `
       <h2>${loc.name}</h2>
       <p class="section-label">${loc.blurb} · x${loc.mult} dumpster</p>
-      <div class="section-label">Always buy more paws</div>
-      ${gear}
+      <button class="btn tree-launch ${readyTree ? 'pulse' : ''}" data-open-scheme>THE SCHEME${readyTree ? ` · ${readyTree} ready` : ''}</button>
+      <div class="section-label">Next buys</div>
+      ${gear || '<p class="help">Open the scheme. Spend. Unlock worse ideas.</p>'}
       ${travel}
-      <div class="section-label">Crew</div>
-      ${crew || '<p class="help">Earn a little, then hire raccoons.</p>'}
       ${prestige}
       <div class="section-label">Uncle Gary says</div>
       <div class="log">${(s.log.length ? s.log : ['The dumpster hums. It knows.']).map((l) => `<div>› ${l}</div>`).join('')}</div>
@@ -361,6 +362,12 @@ export function mount(root, game) {
     $('[data-cat]').hidden = Date.now() > s.catUntil;
     $('[data-possum]').hidden = !s.possumBlocking;
     raccoon.classList.toggle('sad', s.bag.length >= cap);
+    $('[data-flies]').classList.toggle('on', Boolean(s.derived.flies) || Boolean(s.derived.fx?.flies));
+    const internN = Math.min(4, s.derived.intern || 0);
+    const internBox = $('[data-interns]');
+    if (internBox.childElementCount !== internN) {
+      internBox.innerHTML = Array.from({ length: internN }, () => '<div class="mini">🦝</div>').join('');
+    }
     const buffHtml = s.buffs
       .map((b) => {
         const left = Math.max(0, b.until - Date.now());
@@ -385,10 +392,10 @@ export function mount(root, game) {
       }).join('')}<div class="footer-btns"><button class="btn" data-close>Close</button></div>`;
     } else {
       modal.innerHTML = `<h2>How to play</h2>
-        <p>Scoop the dumpster. Fill the bag. Sell to Uncle Gary. Buy anything that makes numbers go up.</p>
-        <p>Bottlecaps (they don't take bag space) buy the next dumpster. Crew scoops while you plot. At the end of the line, incorporate for infamy.</p>
+        <p>Scoop the dumpster. Fill the bag. Sell to Uncle Gary. Open <b>THE SCHEME</b> and spend — every buy lights a new branch of worse ideas.</p>
+        <p>Bottlecaps buy the next dumpster. Interns scoop while you plot. At the end of the line, incorporate for infamy.</p>
         <p>Pet the cat. Kick the possum. This is legally a workplace.</p>
-        <p><b>Space</b> scoop · <b>S</b> sell · <b>M</b> mute</p>
+        <p><b>Space</b> scoop · <b>S</b> sell · <b>T</b> scheme · <b>M</b> mute · <b>F11</b> fullscreen</p>
         <div class="footer-btns"><button class="btn" data-close>Close</button></div>`;
     }
     modalWrap.classList.remove('hidden');
@@ -418,8 +425,15 @@ export function mount(root, game) {
       const r = game.kickPossum();
       if (r.ok) {
         kickSound();
+        raccoon.classList.remove('kick-pose');
+        void raccoon.offsetWidth;
+        raccoon.classList.add('kick-pose');
+        possumEl.classList.remove('yeet');
+        void possumEl.offsetWidth;
+        possumEl.classList.add('yeet');
         toast('Workplace drama', 'The possum is writing a 1-star review.');
         for (const a of r.unlocked || []) toast('🏆 ' + a.name, a.desc);
+        setTimeout(() => raccoon.classList.remove('kick-pose'), 450);
       }
       return;
     }
@@ -431,6 +445,12 @@ export function mount(root, game) {
     const r = game.petCat();
     if (r.ok) {
       petSound();
+      catEl.classList.remove('pet');
+      void catEl.offsetWidth;
+      catEl.classList.add('pet');
+      const box = catEl.getBoundingClientRect();
+      const stageBox = stage.getBoundingClientRect();
+      spawnFx(`<div class="popnum r-mythic">♥</div>`, box.left - stageBox.left + 30, box.top - stageBox.top);
       toast('Purr tax paid', 'Lucky storm incoming.');
     }
   });
@@ -469,6 +489,10 @@ export function mount(root, game) {
       renderSide();
       return;
     }
+    if (e.target.closest('[data-open-scheme]')) {
+      scheme.open();
+      return;
+    }
     const open = e.target.closest('[data-open]');
     if (open) openModal(open.getAttribute('data-open'));
     if (e.target.closest('[data-mute]')) {
@@ -486,13 +510,28 @@ export function mount(root, game) {
     if (!game.state.started || title.classList.contains('hidden') === false) {
       // still allow after start
     }
-    if (e.key === 'Escape') modalWrap.classList.add('hidden');
+    if (e.key === 'Escape') {
+      if (scheme.isOpen()) scheme.close();
+      modalWrap.classList.add('hidden');
+    }
+    if (e.key === 't' || e.key === 'T') {
+      if (scheme.isOpen()) scheme.close();
+      else if (title.classList.contains('hidden')) scheme.open();
+    }
     if (e.code === 'Space') {
       e.preventDefault();
-      if (!modalWrap.classList.contains('hidden')) return;
+      if (!modalWrap.classList.contains('hidden') || scheme.isOpen()) return;
       if (title.classList.contains('hidden')) $('[data-scoop]').click();
     }
-    if (e.key === 's' || e.key === 'S') doSell();
+    if (e.key === 's' || e.key === 'S') {
+      if (scheme.isOpen()) return;
+      doSell();
+    }
+    if (e.key === 'F11') {
+      e.preventDefault();
+      if (!document.fullscreenElement) document.documentElement.requestFullscreen?.();
+      else document.exitFullscreen?.();
+    }
     if (e.key === 'm' || e.key === 'M') {
       game.state.muted = !game.state.muted;
       setMuted(game.state.muted);
@@ -510,8 +549,14 @@ export function mount(root, game) {
     }
   });
 
-  renderSide();
-  let last = performance.now();
+  setInterval(() => {
+    if (!game.state.started || scheme.isOpen()) return;
+    if (raccoon.classList.contains('scooping') || raccoon.classList.contains('sad')) return;
+    raccoon.classList.remove('scratch');
+    void raccoon.offsetWidth;
+    raccoon.classList.add('scratch');
+    setTimeout(() => raccoon.classList.remove('scratch'), 700);
+  }, 9000);
   let shopTimer = 0;
   function frame(now) {
     const dt = Math.min(200, now - last);

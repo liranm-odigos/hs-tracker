@@ -354,7 +354,7 @@ export const BUFFS = {
 export const ACHIEVEMENTS = [
   { id: 'first_scoop', name: 'First Scoop', desc: 'You touched garbage on purpose.', test: (s) => s.stats.scoops >= 1 },
   { id: 'first_sell', name: 'Liquidity Event', desc: 'Sold junk. Became a business.', test: (s) => s.stats.sold >= 1 },
-  { id: 'first_buy', name: 'Investor', desc: 'Bought an upgrade with trash money.', test: (s) => Object.values(s.upgrades).some((v) => v > 0) },
+  { id: 'first_buy', name: 'Investor', desc: 'Bought an upgrade with trash money.', test: (s) => Object.entries(s.tree || {}).some(([k, v]) => k !== 'root' && v > 0) || Object.values(s.upgrades || {}).some((v) => v > 0) },
   { id: 'stuffed', name: 'Stuffed', desc: 'Filled the bag like a professional.', test: (s) => s.stats.stuffed >= 1 },
   { id: 'scoops_100', name: 'Wrist Cardio', desc: '100 scoops. The dumpster knows your name.', test: (s) => s.stats.scoops >= 100 },
   { id: 'scoops_1k', name: 'Just Keep Scooping', desc: '1,000 scoops. This is a lifestyle.', test: (s) => s.stats.scoops >= 1000 },
@@ -375,6 +375,8 @@ export const ACHIEVEMENTS = [
   { id: 'prestige', name: 'Incorporate', desc: 'Reset the empire. Kept the infamy.', test: (s) => s.prestigeCount >= 1 },
   { id: 'codex20', name: 'Connoisseur', desc: 'Discovered 20 kinds of junk.', test: (s) => s.discovered.length >= 20 },
   { id: 'codex40', name: 'Trash Scholar', desc: 'Discovered 40 kinds of junk.', test: (s) => s.discovered.length >= 40 },
+  { id: 'schemer', name: 'Schemer', desc: 'Unlocked 8 scheme nodes. The whiteboard is full.', test: (s) => Object.entries(s.tree || {}).filter(([k, v]) => k !== 'root' && v > 0).length >= 8 },
+  { id: 'conspiracy', name: 'Conspiracy Board', desc: 'Unlocked 20 scheme nodes. Red string everywhere.', test: (s) => Object.entries(s.tree || {}).filter(([k, v]) => k !== 'root' && v > 0).length >= 20 },
 ];
 
 export const NEWS = [

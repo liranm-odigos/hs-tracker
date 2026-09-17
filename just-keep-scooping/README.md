@@ -2,11 +2,9 @@
 
 A tiny incremental about garbage, capitalism, and a raccoon in a tiny tie.
 
-You scoop a dumpster. You fill a bag. You sell the bag to **Uncle Gary**. You buy paws, speed, luck, interns, and a bus ticket to a weirder dumpster. Then you scoop again, except now the numbers are lying in a funnier font.
+You scoop a dumpster. You fill a bag. You sell the bag to **Uncle Gary**. You spend every coin on **The Scheme** — a branching upgrade tree that unlocks worse ideas the more you invest. Then you scoop again, except now the numbers are lying in a funnier font.
 
-This is the same kind of loop as a short fishing incremental: an action, a haul, a sell, an upgrade that makes the next haul ridiculous. The joke is that you are a raccoon CEO.
-
-## Play
+## Play in the browser
 
 ```bash
 cd just-keep-scooping
@@ -18,20 +16,30 @@ Open the URL Vite prints (usually `http://localhost:5174`). Click **I HAVE PAWS*
 
 - **Space** or the orange button: scoop
 - **S** or Uncle Gary: sell
+- **T**: open The Scheme
 - **M**: mute
-- Pet the alley cat when she shows up
-- Kick the possum off the lid when he nags
+- **F11**: fullscreen
+- Pet the alley cat. Kick the possum.
 
 Progress is saved in the browser.
 
+## Windows / Steam
+
+This is a real Windows game, not a tab. Tauri wraps it as `Just Keep Scooping.exe` with an NSIS installer.
+
+```bash
+npm run windows
+```
+
+That needs a Windows box (or the GitHub Action `.github/workflows/just-keep-scooping-windows.yml`, which uploads the installer). Steam upload steps live in [STEAM.md](STEAM.md). You need a Steamworks App ID; you do not need paid art.
+
 ## Why it gets sticky
 
-- There is almost always a next upgrade glowing in the shop
+- The Scheme is a big tree: spending on a node lights the children, spending enough coins unlocks whole branches (crew, empire, Dumpster God)
 - Combos reward mashing, then selling at the peak
 - Bottlecaps ride along for free and fill a bus ticket to the next district
 - Interns start scooping for you; Uncle Gary Jr. sells when the bag pops
-- Rares splash the screen and land in a codex
-- At the end of the line you **incorporate** (prestige) for infamy, which multiplies everything
+- Raccoon, dumpster, cat, and possum actually move (not Pixar, still a tiny tie)
 
 ## Assets
 
@@ -43,14 +51,9 @@ Nothing here is paid.
 | Sound | Tiny Web Audio synth (pops, coins, a sad possum thud) |
 | Fonts | Google Fonts: Lilita One + Nunito |
 | Music | None yet |
+| Windows | Tauri 2 + WebView2 |
 
-If you want this to feel like a store page later, the upgrades that actually move the needle are:
-
-1. **A 30–60s music loop** — cozy night alley / goofy bass. A licensed itch.io / Epidemic track is enough.
-2. **A small SFX pack** — lid slam, bag rustle, rare sparkle, bus hiss. Kenney or a $5 marketplace pack.
-3. **Pixel or illustration pass** — raccoon, Uncle Gary, 9 dumpsters, rarity pips. One artist, not a store full of packs.
-
-You can ship and get addicted without any of that. Paid art is polish, not the loop.
+Store-page polish later: a music loop, a $5 SFX pack, one pixel pass. Optional.
 
 ## Tests
 

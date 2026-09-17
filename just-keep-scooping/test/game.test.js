@@ -17,6 +17,7 @@ import {
 } from '../src/game.js';
 import { formatNumber } from '../src/format.js';
 import { LOCATIONS, UPGRADES } from '../src/data.js';
+import { TREE_NODES, nodeUnlocked } from '../src/tree.js';
 
 function rngSeq(values) {
   let i = 0;
@@ -140,4 +141,28 @@ test('rollItem always returns a real piece of junk', () => {
     assert.ok(item.id);
     assert.ok(item.value >= 1);
   }
+});
+
+test('the scheme is a big branching tree', () => {
+  assert.ok(TREE_NODES.length >= 40);
+  const withParents = TREE_NODES.filter((n) => n.parents?.length);
+  assert.ok(withParents.length >= 30);
+});
+
+test('spending on the tree unlocks intern raccoons', () => {
+  const s = createState();
+  s.coins = 8000;
+  s.stats.sold = 1;
+  const intern = TREE_NODES.find((n) => n.id === 'intern');
+  assert.equal(nodeUnlocked(s, intern), false);
+  let guard = 0;
+  while ((s.spent || 0) < 70 && guard < 40) {
+    guard += 1;
+    const r = buy(s, 'tree', 'paw');
+    assert.equal(r.ok, true);
+  }
+  assert.equal(nodeUnlocked(s, intern), true);
+  const hired = buy(s, 'tree', 'intern');
+  assert.equal(hired.ok, true);
+  assert.ok(s.derived.intern >= 1);
 });
