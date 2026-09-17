@@ -66,8 +66,8 @@ export function mount(root, game) {
         <div class="hud">
           <div class="chip" data-hud="coins">💰 <b>0¢</b></div>
           <div class="chip bag" data-hud="bag">🎒 0/8</div>
-          <div class="chip" data-hud="caps">🧢 0</div>
-          <div class="chip" data-hud="infamy">😈 x1</div>
+          <div class="chip" data-hud="caps">🧢 0 caps</div>
+          <div class="chip" data-hud="infamy">x1 infamy</div>
         </div>
       </header>
       <div class="ticker"><div class="ticker-track">${NEWS.concat(NEWS).map((n) => `<span>🦝 ${n}</span>`).join('')}</div></div>
@@ -341,8 +341,8 @@ export function mount(root, game) {
     const bagChip = $('[data-hud="bag"]');
     bagChip.textContent = `🎒 ${s.bag.length}/${cap}`;
     bagChip.classList.toggle('full', s.bag.length >= cap);
-    $('[data-hud="caps"]').textContent = `🧢 ${s.bottlecaps}`;
-    $('[data-hud="infamy"]').textContent = `😈 x${s.infamy.toFixed(2)}`;
+    $('[data-hud="caps"]').innerHTML = `🧢 <b>${s.bottlecaps}</b> caps`;
+    $('[data-hud="infamy"]').textContent = `x${s.infamy.toFixed(2)} infamy`;
     $('[data-neon]').textContent = s.derived.location.neon;
     for (const cls of [...stage.classList]) {
       if (cls.startsWith('sky-')) stage.classList.remove(cls);
@@ -484,8 +484,10 @@ export function mount(root, game) {
     if (!game.state.started || title.classList.contains('hidden') === false) {
       // still allow after start
     }
+    if (e.key === 'Escape') modalWrap.classList.add('hidden');
     if (e.code === 'Space') {
       e.preventDefault();
+      if (!modalWrap.classList.contains('hidden')) return;
       if (title.classList.contains('hidden')) $('[data-scoop]').click();
     }
     if (e.key === 's' || e.key === 'S') doSell();

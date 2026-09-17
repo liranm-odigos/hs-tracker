@@ -238,7 +238,7 @@ button { cursor: pointer; }
   transform-origin: 50% 80%;
   animation: idle 1.6s ease-in-out infinite;
 }
-.raccoon.scooping { animation: scoop 0.32s ease; }
+.raccoon.scooping { animation: scoop 0.42s ease; }
 .raccoon.sad { animation: sad 1.2s ease-in-out infinite; filter: grayscale(0.3); }
 .raccoon svg { width: 100%; height: 100%; overflow: visible; }
 
@@ -336,7 +336,7 @@ button { cursor: pointer; }
 .floater {
   position: absolute;
   font-size: 28px;
-  animation: floatUp 0.7s ease forwards;
+  animation: floatUp 0.95s ease forwards;
   filter: drop-shadow(0 4px 0 #0006);
 }
 .popnum {
@@ -579,8 +579,8 @@ button { cursor: pointer; }
 }
 @keyframes scoop {
   0% { transform: translate(0, 0) rotate(0); }
-  35% { transform: translate(18px, -16px) rotate(-14deg); }
-  60% { transform: translate(28px, 10px) rotate(10deg); }
+  30% { transform: translate(26px, -28px) rotate(-18deg); }
+  55% { transform: translate(40px, 14px) rotate(12deg); }
   100% { transform: translate(0, 0) rotate(0); }
 }
 @keyframes sad {
@@ -598,7 +598,7 @@ button { cursor: pointer; }
 }
 @keyframes floatUp {
   0% { opacity: 1; transform: translate(-50%, 0) scale(1); }
-  100% { opacity: 0; transform: translate(-50%, -90px) scale(1.2); }
+  100% { opacity: 0; transform: translate(-50%, -120px) scale(1.35); }
 }
 @keyframes splash {
   0% { opacity: 0; transform: translate(-50%, 10px) scale(0.6); }
