@@ -1,0 +1,70 @@
+# Copy this file to rotation.toml and replace the names, keys, and times
+# with the build you play. Cooldowns are tracked from the moment a key is
+# sent. The game is not read, so a number that does not match the skill
+# will press too early or too late.
+#
+# priority: lower number wins. Off-GCD skills can fire during the global
+# cooldown, including between opener steps.
+# sequence: each skill waits for its own turn, in the order listed.
+# charges: how many times the skill can be sent before cooldown_ms has to
+# refill one charge.
+
+toggle = "F8"
+cancel = "F9"
+key_hold_ms = 15
+min_gap_ms = 15
+focus = "Aion"
+
+[[builds]]
+name = "example"
+mode = "priority"
+gcd_ms = 1000
+active = true
+opener = ["Opener", "Burst"]
+
+[[builds.skills]]
+name = "Weave"
+key = "Q"
+cooldown_ms = 4000
+priority = 0
+off_gcd = true
+
+[[builds.skills]]
+name = "Burst"
+key = "1"
+cooldown_ms = 8000
+priority = 1
+
+[[builds.skills]]
+name = "Opener"
+key = "2"
+cooldown_ms = 12000
+priority = 2
+
+[[builds.skills]]
+name = "Filler"
+key = "3"
+cooldown_ms = 0
+priority = 50
+
+[[builds]]
+name = "sequence-example"
+mode = "sequence"
+gcd_ms = 1000
+opener = ["First"]
+
+[[builds.skills]]
+name = "First"
+key = "1"
+cooldown_ms = 4000
+
+[[builds.skills]]
+name = "Second"
+key = "Shift+2"
+cooldown_ms = 0
+
+[[builds.skills]]
+name = "Finisher"
+key = "3"
+cooldown_ms = 8000
+charges = 2
