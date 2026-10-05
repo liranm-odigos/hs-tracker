@@ -3,6 +3,7 @@ dist/
 # the release body CI cuts out of CHANGELOG.md
 RELEASE_NOTES.md
 src-tauri/target/
+aion-assist/target/
 src-tauri/gen/schemas/
 *.log
 

@@ -1,0 +1,80 @@
+# Open the window with: aion-assist
+# The window edits this file. You can still edit it by hand.
+#
+# Add a skill by pasting another [[builds.skills]] block and editing the
+# name, key, and cooldown. Lower priority numbers go first. off_gcd skills
+# can fire during the global cooldown. The opener plays at the start of a
+# pull, when those skills are ready.
+#
+# guard = true refuses to press keys unless one pixel of the target name
+# matches the captured NPC color and not the captured player color. Teach
+# both colors in the window. This file leaves the check off.
+#
+# trigger:
+#   toggle  press F8 to start and stop
+#   hold    run only while `hold` is down (the game still sees that button)
+#   aim     run only while the taught aim marker is on screen
+#           teach it with: aion-assist --learn-aim
+#           aim at a monster, put the cursor on the marker, press F8
+
+trigger = "hold"
+hold = "RButton"
+toggle = "F8"
+cancel = "F9"
+key_hold_ms = 15
+min_gap_ms = 15
+focus = "Aion"
+
+[[builds]]
+name = "example"
+mode = "priority"
+gcd_ms = 1000
+active = true
+opener = ["Opener", "Burst"]
+
+[[builds.skills]]
+name = "Weave"
+key = "Q"
+cooldown_ms = 4000
+priority = 0
+off_gcd = true
+
+[[builds.skills]]
+name = "Burst"
+key = "1"
+cooldown_ms = 8000
+priority = 1
+
+[[builds.skills]]
+name = "Opener"
+key = "2"
+cooldown_ms = 12000
+priority = 2
+
+[[builds.skills]]
+name = "Filler"
+key = "3"
+cooldown_ms = 0
+priority = 50
+
+[[builds]]
+name = "sequence-example"
+mode = "sequence"
+gcd_ms = 1000
+opener = ["First"]
+
+[[builds.skills]]
+name = "First"
+key = "1"
+cooldown_ms = 4000
+
+[[builds.skills]]
+name = "Second"
+key = "Shift+2"
+cooldown_ms = 0
+
+[[builds.skills]]
+name = "Finisher"
+key = "3"
+cooldown_ms = 8000
+charges = 2
