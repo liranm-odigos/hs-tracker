@@ -44,6 +44,62 @@ pub struct Build {
     pub active: bool,
 }
 
+impl Build {
+    pub fn is_opener(&self, index: usize) -> bool {
+        self.opener.contains(&index)
+    }
+
+    pub fn set_opener(&mut self, index: usize, on: bool) {
+        if on {
+            if !self.opener.contains(&index) {
+                self.opener.push(index);
+            }
+        } else {
+            self.opener.retain(|slot| *slot != index);
+        }
+    }
+
+    pub fn remove_skill(&mut self, index: usize) {
+        if index >= self.skills.len() || self.skills.len() == 1 {
+            return;
+        }
+        self.skills.remove(index);
+        self.opener.retain_mut(|slot| {
+            if *slot == index {
+                return false;
+            }
+            if *slot > index {
+                *slot -= 1;
+            }
+            true
+        });
+    }
+
+    pub fn move_skill(&mut self, from: usize, to: usize) {
+        if from == to || from >= self.skills.len() || to >= self.skills.len() {
+            return;
+        }
+        let skill = self.skills.remove(from);
+        self.skills.insert(to, skill);
+        for slot in &mut self.opener {
+            *slot = remap_index(*slot, from, to);
+        }
+    }
+}
+
+fn remap_index(index: usize, from: usize, to: usize) -> usize {
+    if index == from {
+        return to;
+    }
+    if from < to && index > from && index <= to {
+        return index - 1;
+    }
+    if to < from && index >= to && index < from {
+        return index + 1;
+    }
+    index
+}
+
 #[derive(Clone, Debug)]
 struct Charges {
     available: u32,
@@ -502,5 +558,29 @@ mod tests {
             engine.poll(start + Duration::from_millis(5000)),
             Step::Press { index: 0 }
         );
+    }
+
+    #[test]
+    fn moving_a_skill_keeps_the_opener_on_that_skill() {
+        let mut build = Build {
+            name: "edit".into(),
+            mode: Mode::Priority,
+            gcd: Duration::from_millis(1000),
+            min_gap: Duration::from_millis(15),
+            opener: vec![0],
+            skills: vec![
+                skill("Opener", "1", 1000, 1, false),
+                skill("Filler", "2", 0, 2, false),
+                skill("Weave", "Q", 1000, 0, true),
+            ],
+            active: true,
+        };
+        build.move_skill(0, 2);
+        assert_eq!(build.skills[2].name, "Opener");
+        assert_eq!(build.opener, vec![2]);
+        build.remove_skill(0);
+        assert_eq!(build.skills[0].name, "Weave");
+        assert_eq!(build.skills[1].name, "Opener");
+        assert_eq!(build.opener, vec![1]);
     }
 }

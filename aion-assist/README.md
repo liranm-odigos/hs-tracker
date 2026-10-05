@@ -1,92 +1,100 @@
 # aion-assist
 
-A Windows program that sends one skill rotation to the focused game window. You describe the build in a text file: keys, cooldowns, charges, an opener, and either a priority list or a fixed sequence. The program keeps those timers and presses the next key when it is due.
+A Windows program that sends one skill rotation to the focused game window. Open it and a window appears. Builds, keys, cooldowns, the trigger, and the NPC check are edited there and saved into `rotation.toml`.
 
-It does not read the game, inject code, or attach to the client. A press is a normal keyboard event, delivered with `SendInput` as a scan code, which is what games read from the keyboard. The key goes to whichever window is focused. Set `focus` if you want it to wait until the window title contains that text, so a rotation cannot type into chat by mistake.
+It does not read the game, inject code, or attach to the client. A press is a normal keyboard event, delivered with `SendInput` as a scan code. The key goes to whichever window is focused.
 
-Automated combat input is commonly against the game's terms of service and can cost the account. This tool does not hide itself from anti-cheat.
+Automated combat input is commonly against the game's terms of service and can cost the account. The NPC check below does not change that. It does not hide the program from anti-cheat, and it does not make the account safe from a ban.
 
-## Why this is fast
-
-The gap between skills is the cooldown you configured, not the language. What keeps the press itself on time:
-
-- The send is one Win32 `SendInput` call. There is no macro program, no `PostMessage`, and no script host in the middle.
-- The Windows timer is set to 1 ms while the program is running. Waits longer than 2 ms sleep, and the last 2 ms spin, so the press is not late by a scheduler tick.
-- The sender thread runs at above-normal priority.
-- The hot path does not print, read a file, or allocate a rotation. Pass `--verbose` only while you are checking a build.
-- The key is held for `key_hold_ms` (default 15). Shorter than 5 ms is rejected because clients drop taps that short. The next key never goes down before the previous one has come up.
-
-Rust is used because that send path is a direct call with no runtime between the timer and `SendInput`, and the rotation clock can be tested on its own.
-
-## Build
-
-Install Rust on Windows, then from this directory:
+## Window
 
 ```text
 cargo build --release
+target\release\aion-assist.exe
 ```
 
-The executable is `target\release\aion-assist.exe`. Copy `rotation.example.toml` next to it as `rotation.toml` and edit it.
+With no options, the window opens. The first time, it starts from the example rotation and writes `rotation.toml` when you press Save. A file already next to the executable, or in the current directory, is loaded instead.
 
-## Run
+The window has three columns:
+
+- **Builds.** Name, global cooldown, and priority or sequence. Start runs the selected build. "Mark active for CLI" is the build a command-line run uses.
+- **Skills.** Key, cooldown, cast time, charges, priority, and whether it is in the opener. Up and Down change the list order. In priority mode the priority number decides which ready skill goes first. In sequence mode the list order is the rotation.
+- **Trigger and NPC check.** How the rotation starts, and the player/NPC colors.
+
+The command line is still there when you want it:
 
 ```text
-aion-assist
 aion-assist --list
 aion-assist --dry-run --ms 8000
-aion-assist --build sequence-example --dry-run
+aion-assist rotation.toml
 ```
 
-`--dry-run` prints the timeline and sends nothing. It also runs on Linux, which is how the rotation clock is tested. Live sending is Windows only.
+`--dry-run` prints the timeline and sends nothing. It also runs on Linux, which is how the rotation clock is tested. Live sending and the window's color capture are Windows only. Passing a file with no other options runs that file in the terminal, the same as before. `--ui` opens the window for a chosen file.
 
-## Add a rotation
+## Only against NPCs
 
-1. Copy `rotation.example.toml` to `rotation.toml` next to the executable.
-2. Set `gcd_ms` to your global cooldown.
-3. Give each skill its own `[[builds.skills]]` block. `key` is what the game has bound. `cooldown_ms` is that skill's cooldown. `priority` is the order: 0 is first.
-4. List the opening skills in `opener`, in the order you press them on a fresh pull.
-5. Mark the build you want with `active = true`. `--build name` selects another one. `--list` shows them.
+The program cannot see a monster or a player. There is no documented color that always means one or the other, so it does not guess. You teach both colors from one pixel of the target-frame name.
 
-A second build is another `[[builds]]` block with its own skills. Cooldowns are counted from the moment a key is sent. The game is not read, so a wrong number presses too early or too late.
+1. Put the game in borderless windowed mode. Exclusive fullscreen hides the pixel.
+2. Turn on **Only run against NPCs**. A new file starts with this on. Start stays off until both colors exist and can be told apart.
+3. Target an NPC. Move this window aside so it does not cover the target frame. Put the cursor on the name and press **Capture NPC**. You have three seconds. That saves the pixel and the NPC color.
+4. Target a player and leave the target frame in the same place. Press **Capture player**. That reads the same pixel, not wherever the cursor is now.
+5. The live swatch shows what that pixel is right now: NPC, player, or unknown.
 
-Check the order before you send anything:
+The rotation runs only when the pixel matches the NPC color. A player match, an unknown color, a missing sample, or two samples that are too close all block it. A tie is treated as a player. If you capture the NPC again at a different pixel, the player color is dropped and has to be taught again.
 
-```text
-aion-assist --dry-run --ms 8000
-```
+This is a screen-color heuristic. It fails closed, and it can still be wrong if the name color shifts, the frame moves, or another window covers that pixel. Turning the check off lets the rotation run on players too. Neither choice makes automated key presses allowed.
 
-## Start when you aim at a monster
+## When it presses keys
 
-The program cannot see a monster. It can watch one pixel of the marker the game draws while your reticle is on an enemy (the circle around it, or the target bar).
+- **Hold.** The rotation runs while a button is down. `RButton` is the usual one, and the game still receives that button.
+- **Aim.** The rotation runs while a taught marker is visible (the circle or the target bar). Capture it in the window, or run `aion-assist --learn-aim`, aim at a monster, put the cursor on the marker, and press `F8`. It starts about 20 ms after the marker is visible and stops about 40 ms after it disappears.
+- **Toggle.** `F8` starts and stops. Windows swallows that key, so the game does not also receive it.
 
-1. In the game, set the reticle to hostile targets, and use borderless windowed mode. Exclusive fullscreen does not share that pixel.
-2. Aim at a monster so the marker is visible. Show the cursor, put it on the marker, and run:
+`F9` stops the run. The window's Stop button does the same. Keys are sent only while the focused window title contains the text in "Window title" (default `Aion`).
 
-```text
-aion-assist --learn-aim
-```
+The NPC check is applied on top of whichever trigger you picked. The trigger can be true and the rotation still holds because the target looks like a player.
 
-3. Press `F8`. That writes `trigger = "aim"` plus the pixel into `rotation.toml`.
-4. Run `aion-assist`. The rotation starts about 20 ms after that marker is visible, and stops about 40 ms after it disappears. `F9` quits.
+## Why the presses stay on time
 
-It cannot tell a monster from a player when both use the same marker. In a PvE area the marker you taught is the monster under the reticle.
+The gap between skills is the cooldown you configured. What keeps the press itself on time:
 
-`trigger = "hold"` and `hold = "RButton"` is the other trigger: the rotation runs only while that button is down, and the game still receives the button. Use it when you want a button instead of the aim marker.
+- The send is one Win32 `SendInput` call. There is no macro program, no `PostMessage`, and no script host in the middle.
+- The Windows timer is set to 1 ms while the program is running. Waits longer than 2 ms sleep, and the last 2 ms spin.
+- The sender thread runs at above-normal priority.
+- The key is held for the key-hold time (default 15 ms). Shorter than 5 ms is rejected. The next key never goes down before the previous one has come up.
 
-`trigger = "toggle"` keeps the old behavior: `F8` starts and stops. Windows swallows that key, so the game does not also receive it.
+## What a build means
 
-## Rotation file
+Cooldowns are counted from the moment a key is sent. The game is not read, so a wrong number presses too early or too late.
+
+- Priority sends the ready skill with the lowest priority number. A skill marked off the global cooldown may fire during it.
+- Sequence walks the list in order and waits instead of skipping.
+- The opener plays first, in the order the skills were marked, when every opener skill is ready. Off-GCD skills can weave while the next opener step waits.
+- Charges are how many times a skill can be sent before its cooldown refills one charge.
+- Cast time holds every skill, including weaves, until the cast finishes.
+- A cooldown of 0 on a low-priority skill is a filler.
+
+The window writes `rotation.toml`. Saving replaces the file, including any comments that were in it. The fields look like this:
 
 ```toml
+trigger = "hold"
+hold = "RButton"
 toggle = "F8"
 cancel = "F9"
 key_hold_ms = 15
 min_gap_ms = 15
 focus = "Aion"
+guard = true
+guard_x = 960
+guard_y = 140
+npc_color = "E6E6E6"
+player_color = "DC2828"
+guard_tolerance = 32
 
 [[builds]]
 name = "example"
-mode = "priority"    # or "sequence"
+mode = "priority"
 gcd_ms = 1000
 active = true
 opener = ["Opener", "Burst"]
@@ -95,23 +103,6 @@ opener = ["Opener", "Burst"]
 name = "Weave"
 key = "Q"
 cooldown_ms = 4000
-priority = 0         # lower number wins
+priority = 0
 off_gcd = true
-
-[[builds.skills]]
-name = "Burst"
-key = "Shift+1"
-cooldown_ms = 8000
-cast_ms = 0
-charges = 2
-priority = 1
 ```
-
-- `mode = "priority"` sends the ready skill with the lowest priority number. A skill with `off_gcd = true` may fire during the global cooldown.
-- `mode = "sequence"` walks the list in order and waits for the next skill instead of skipping it.
-- `opener` is played first, in order. Off-GCD skills can weave while the next opener step is waiting on the global cooldown.
-- `charges` is how many times a skill can be sent before `cooldown_ms` refills one charge.
-- `cast_ms` holds every skill, including weaves, until the cast finishes.
-- `cooldown_ms = 0` on a low-priority skill is a filler: it is sent when the global cooldown is up and nothing better is ready.
-
-Keys are written as `1`, `Q`, `F8`, `Space`, `Numpad3`, or with modifiers in front: `Shift+1`, `Ctrl+Q`, `Alt+E`. The Windows key is rejected.

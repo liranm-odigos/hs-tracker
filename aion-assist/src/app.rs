@@ -31,6 +31,11 @@ fn dispatch(command: Command) -> Result<Outcome, String> {
             learn_aim(&path)?;
             Ok(Outcome::Done)
         }
+        Command::Gui { path } => {
+            let path = resolve_gui_path(&path);
+            crate::ui::launch(&path)?;
+            Ok(Outcome::Done)
+        }
         Command::Run {
             path,
             build,
@@ -49,6 +54,10 @@ fn dispatch(command: Command) -> Result<Outcome, String> {
             }
         }
     }
+}
+
+fn resolve_gui_path(path: &Path) -> PathBuf {
+    locate(path).unwrap_or_else(|_| path.to_path_buf())
 }
 
 fn locate(path: &Path) -> Result<PathBuf, String> {
@@ -92,6 +101,8 @@ fn start_live(config: &AppConfig, build: &Build, verbose: bool) -> Result<Outcom
         build,
         key_hold: config.hold,
         focus: config.focus.as_deref(),
+        guard: &config.guard,
+        status: None,
         verbose,
     })?;
     Ok(Outcome::Done)
@@ -144,6 +155,9 @@ fn print_live_banner(config: &AppConfig, build: &Build) {
             println!("sending only while the focused window title contains \"{focus}\"");
         }
         None => println!("sending keys to whatever window is focused"),
+    }
+    if config.guard.enabled {
+        println!("running only when the target name matches the taught NPC color");
     }
     match &config.trigger {
         Trigger::Toggle => println!(

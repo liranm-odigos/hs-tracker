@@ -125,6 +125,8 @@ mod win {
         pub build: &'a crate::rotation::Build,
         pub key_hold: std::time::Duration,
         pub focus: Option<&'a str>,
+        pub guard: &'a crate::guard::Guard,
+        pub status: Option<std::sync::Arc<std::sync::Mutex<String>>>,
         pub verbose: bool,
     }
 
@@ -169,6 +171,9 @@ mod win {
         }
 
         enable_dpi();
+        if let Err(reason) = session.guard.ready() {
+            return Err(reason.to_string());
+        }
         let running = Arc::new(AtomicBool::new(false));
         let toggle_key = match session.trigger {
             Trigger::Toggle => Some(session.toggle.clone()),
@@ -180,6 +185,7 @@ mod win {
         let mut engine = Engine::new(session.build.clone(), Instant::now());
         let mut gate = Gate::new();
         let mut engaged = false;
+        let mut reported = String::new();
 
         let stop = || STOP.load(Ordering::Acquire);
         while !stop() {
@@ -199,7 +205,13 @@ mod win {
                     println!("rotation off");
                 }
             }
-            let send_now = engaged && focused;
+            let allowed = allows_target(&screen, session.guard, focused);
+            let send_now = engaged && focused && allowed;
+            publish(
+                session.status.as_ref(),
+                &mut reported,
+                status_line(engaged, focused, allowed, session.guard, &screen),
+            );
             if !send_now {
                 if wait_until(now + std::time::Duration::from_millis(5), stop) {
                     break;
@@ -220,6 +232,7 @@ mod win {
                     let screen = &screen;
                     let trigger = session.trigger;
                     let focus = session.focus;
+                    let guard = session.guard;
                     let gate_ref = &mut gate;
                     wait_until(slice, || {
                         if stop() {
@@ -233,7 +246,7 @@ mod win {
                                 gate_ref.update(hit, Instant::now())
                             }
                         };
-                        !want || !focused
+                        !want || !focused || !allows_target(screen, guard, focused)
                     });
                     continue;
                 }
@@ -258,6 +271,7 @@ mod win {
             let screen = &screen;
             let trigger = session.trigger;
             let focus = session.focus;
+            let guard = session.guard;
             let gate_ref = &mut gate;
             wait_until(pressed_at + session.key_hold, || {
                 if stop() {
@@ -269,7 +283,7 @@ mod win {
                     Trigger::Toggle => hit,
                     Trigger::Hold(_) | Trigger::Aim(_) => gate_ref.update(hit, Instant::now()),
                 };
-                !want || !focused
+                !want || !focused || !allows_target(screen, guard, focused)
             });
             // Release before the cooldown is recorded so the next press cannot
             // overlap this one, and before any logging which can block.
@@ -604,10 +618,116 @@ mod win {
             }
         }
     }
+
+    pub fn request_stop() {
+        STOP.store(true, Ordering::Release);
+    }
+
+    pub fn sample_cursor() -> Result<AimMarker, String> {
+        enable_dpi();
+        let screen = Screen::open()?;
+        let mut point = POINT { x: 0, y: 0 };
+        if unsafe { GetCursorPos(&mut point) } == 0 {
+            return Err("could not read the mouse position".into());
+        }
+        let color = screen.pixel(point.x, point.y).ok_or_else(|| {
+            "could not read that pixel. Use borderless windowed mode.".to_string()
+        })?;
+        Ok(AimMarker {
+            x: point.x,
+            y: point.y,
+            color,
+            tolerance: 32,
+        })
+    }
+
+    pub fn sample_at(x: i32, y: i32) -> Result<crate::aim::Rgb, String> {
+        enable_dpi();
+        let screen = Screen::open()?;
+        screen
+            .pixel(x, y)
+            .ok_or_else(|| "could not read that pixel. Use borderless windowed mode.".into())
+    }
+
+    fn allows_target(screen: &Screen, guard: &crate::guard::Guard, focused: bool) -> bool {
+        if !guard.enabled {
+            return true;
+        }
+        if !focused {
+            return false;
+        }
+        let (Some(x), Some(y)) = (guard.x, guard.y) else {
+            return false;
+        };
+        guard.verdict(screen.pixel(x, y)) == crate::guard::Verdict::Npc
+    }
+
+    fn status_line(
+        engaged: bool,
+        focused: bool,
+        allowed: bool,
+        guard: &crate::guard::Guard,
+        screen: &Screen,
+    ) -> String {
+        if !engaged {
+            return "Waiting for the trigger".into();
+        }
+        if !focused {
+            return "Waiting for the game window".into();
+        }
+        if allowed {
+            return if guard.enabled {
+                "Running on an NPC".into()
+            } else {
+                "Running".into()
+            };
+        }
+        let (Some(x), Some(y)) = (guard.x, guard.y) else {
+            return "Teach an NPC and a player before the rotation can run.".into();
+        };
+        match guard.verdict(screen.pixel(x, y)) {
+            crate::guard::Verdict::Player => "Aimed at a player — rotation held".into(),
+            crate::guard::Verdict::Unknown => "Target is not a taught NPC — rotation held".into(),
+            crate::guard::Verdict::Untaught => {
+                "Teach an NPC and a player before the rotation can run.".into()
+            }
+            crate::guard::Verdict::Npc => "Running on an NPC".into(),
+        }
+    }
+
+    fn publish(
+        status: Option<&std::sync::Arc<std::sync::Mutex<String>>>,
+        reported: &mut String,
+        text: String,
+    ) {
+        if reported == &text {
+            return;
+        }
+        println!("{text}");
+        *reported = text.clone();
+        if let Some(status) = status {
+            if let Ok(mut slot) = status.lock() {
+                *slot = text;
+            }
+        }
+    }
 }
 
 #[cfg(windows)]
-pub use win::{learn_marker, run_live, Session};
+pub use win::{learn_marker, request_stop, run_live, sample_at, sample_cursor, Session};
+
+#[cfg(not(windows))]
+pub fn sample_cursor() -> Result<crate::config::AimMarker, String> {
+    Err("screen capture is built for Windows".into())
+}
+
+#[cfg(not(windows))]
+pub fn sample_at(_x: i32, _y: i32) -> Result<crate::aim::Rgb, String> {
+    Err("screen capture is built for Windows".into())
+}
+
+#[cfg(not(windows))]
+pub fn request_stop() {}
 
 #[cfg(test)]
 mod tests {

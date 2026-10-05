@@ -1,9 +1,14 @@
-# Copy this file to rotation.toml.
+# Open the window with: aion-assist
+# The window edits this file. You can still edit it by hand.
 #
 # Add a skill by pasting another [[builds.skills]] block and editing the
 # name, key, and cooldown. Lower priority numbers go first. off_gcd skills
 # can fire during the global cooldown. The opener plays at the start of a
 # pull, when those skills are ready.
+#
+# guard = true refuses to press keys unless one pixel of the target name
+# matches the captured NPC color and not the captured player color. Teach
+# both colors in the window. This file leaves the check off.
 #
 # trigger:
 #   toggle  press F8 to start and stop

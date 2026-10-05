@@ -8,6 +8,7 @@ use std::time::Duration;
 use serde::Deserialize;
 
 use crate::aim::{self, Rgb};
+use crate::guard::Guard;
 use crate::keys::{self, KeyCombo};
 use crate::rotation::{Build, Mode, Skill};
 
@@ -17,7 +18,7 @@ const MAX_GAP_MS: u64 = 2_000;
 const MAX_TIME_MS: u64 = 3_600_000;
 const MAX_CHARGES: u32 = 20;
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct AppConfig {
     pub trigger: Trigger,
     pub toggle: KeyCombo,
@@ -25,6 +26,7 @@ pub struct AppConfig {
     pub hold: Duration,
     pub focus: Option<String>,
     pub min_gap_raised: bool,
+    pub guard: Guard,
     pub builds: Vec<Build>,
 }
 
@@ -115,6 +117,7 @@ fn from_raw(raw: RawFile) -> Result<AppConfig, String> {
         return Err("toggle and cancel are the same key".into());
     }
     let trigger = trigger_from_raw(&raw, &cancel)?;
+    let guard = guard_from_raw(&raw)?;
 
     let mut names = Vec::new();
     let mut builds = Vec::with_capacity(raw.builds.len());
@@ -145,6 +148,7 @@ fn from_raw(raw: RawFile) -> Result<AppConfig, String> {
         hold: Duration::from_millis(hold_ms),
         focus,
         min_gap_raised,
+        guard,
         builds,
     })
 }
@@ -281,6 +285,18 @@ struct RawFile {
     aim_color: Option<String>,
     #[serde(default)]
     aim_tolerance: Option<u64>,
+    #[serde(default)]
+    guard: bool,
+    #[serde(default)]
+    guard_x: Option<i64>,
+    #[serde(default)]
+    guard_y: Option<i64>,
+    #[serde(default)]
+    npc_color: Option<String>,
+    #[serde(default)]
+    player_color: Option<String>,
+    #[serde(default)]
+    guard_tolerance: Option<u64>,
     toggle: String,
     cancel: String,
     #[serde(default = "default_hold")]
@@ -349,6 +365,134 @@ fn trigger_from_raw(raw: &RawFile, cancel: &KeyCombo) -> Result<Trigger, String>
 
 fn screen_coord(value: i64, what: &str) -> Result<i32, String> {
     i32::try_from(value).map_err(|_| format!("{what} is out of range"))
+}
+
+fn guard_from_raw(raw: &RawFile) -> Result<Guard, String> {
+    let tolerance = match raw.guard_tolerance {
+        None => 32,
+        Some(value) if value <= 255 => value as u8,
+        Some(value) => return Err(format!("guard_tolerance is {value}; the maximum is 255")),
+    };
+    let npc = match &raw.npc_color {
+        Some(color) => Some(aim::parse_color(color).map_err(|err| format!("npc_color: {err}"))?),
+        None => None,
+    };
+    let player = match &raw.player_color {
+        Some(color) => {
+            Some(aim::parse_color(color).map_err(|err| format!("player_color: {err}"))?)
+        }
+        None => None,
+    };
+    Ok(Guard {
+        enabled: raw.guard,
+        x: raw.guard_x.map(|value| screen_coord(value, "guard_x")).transpose()?,
+        y: raw.guard_y.map(|value| screen_coord(value, "guard_y")).transpose()?,
+        npc,
+        player,
+        tolerance,
+    })
+}
+
+pub fn starter() -> AppConfig {
+    let mut config = parse(include_str!("../rotation.example.toml"))
+        .expect("the example rotation is valid");
+    config.guard.enabled = true;
+    config
+}
+
+pub fn save(path: &Path, config: &AppConfig) -> Result<(), String> {
+    let text = to_toml(config);
+    parse(&text)?;
+    fs::write(path, text).map_err(|err| format!("could not write {}: {err}", path.display()))
+}
+
+pub fn to_toml(config: &AppConfig) -> String {
+    let mut out = String::new();
+    match &config.trigger {
+        Trigger::Toggle => out.push_str("trigger = \"toggle\"\n"),
+        Trigger::Hold(key) => {
+            out.push_str("trigger = \"hold\"\n");
+            out.push_str(&format!("hold = {}\n", toml_string(&key.label)));
+        }
+        Trigger::Aim(marker) => {
+            out.push_str("trigger = \"aim\"\n");
+            out.push_str(&format!("aim_x = {}\n", marker.x));
+            out.push_str(&format!("aim_y = {}\n", marker.y));
+            out.push_str(&format!("aim_color = \"{}\"\n", marker.color));
+            out.push_str(&format!("aim_tolerance = {}\n", marker.tolerance));
+        }
+    }
+    out.push_str(&format!("toggle = {}\n", toml_string(&config.toggle.label)));
+    out.push_str(&format!("cancel = {}\n", toml_string(&config.cancel.label)));
+    out.push_str(&format!("key_hold_ms = {}\n", config.hold.as_millis()));
+    let gap = config
+        .builds
+        .first()
+        .map(|build| build.min_gap.as_millis())
+        .unwrap_or(15);
+    out.push_str(&format!("min_gap_ms = {gap}\n"));
+    if let Some(focus) = &config.focus {
+        out.push_str(&format!("focus = {}\n", toml_string(focus)));
+    }
+    out.push_str(&format!("guard = {}\n", config.guard.enabled));
+    if let Some(x) = config.guard.x {
+        out.push_str(&format!("guard_x = {x}\n"));
+    }
+    if let Some(y) = config.guard.y {
+        out.push_str(&format!("guard_y = {y}\n"));
+    }
+    if let Some(color) = config.guard.npc {
+        out.push_str(&format!("npc_color = \"{color}\"\n"));
+    }
+    if let Some(color) = config.guard.player {
+        out.push_str(&format!("player_color = \"{color}\"\n"));
+    }
+    out.push_str(&format!(
+        "guard_tolerance = {}\n",
+        config.guard.tolerance
+    ));
+    for build in &config.builds {
+        out.push_str("\n[[builds]]\n");
+        out.push_str(&format!("name = {}\n", toml_string(&build.name)));
+        out.push_str(&format!("mode = \"{}\"\n", build.mode.as_str()));
+        out.push_str(&format!("gcd_ms = {}\n", build.gcd.as_millis()));
+        if build.active {
+            out.push_str("active = true\n");
+        }
+        if !build.opener.is_empty() {
+            let names: Vec<String> = build
+                .opener
+                .iter()
+                .filter_map(|index| build.skills.get(*index).map(|skill| toml_string(&skill.name)))
+                .collect();
+            out.push_str(&format!("opener = [{}]\n", names.join(", ")));
+        }
+        for skill in &build.skills {
+            out.push_str("\n[[builds.skills]]\n");
+            out.push_str(&format!("name = {}\n", toml_string(&skill.name)));
+            out.push_str(&format!("key = {}\n", toml_string(&skill.key.label)));
+            out.push_str(&format!("cooldown_ms = {}\n", skill.cooldown.as_millis()));
+            if skill.cast != Duration::ZERO {
+                out.push_str(&format!("cast_ms = {}\n", skill.cast.as_millis()));
+            }
+            out.push_str(&format!("priority = {}\n", skill.priority));
+            if skill.off_gcd {
+                out.push_str("off_gcd = true\n");
+            }
+            if skill.charges != 1 {
+                out.push_str(&format!("charges = {}\n", skill.charges));
+            }
+        }
+    }
+    out.push('\n');
+    out
+}
+
+fn toml_string(value: &str) -> String {
+    format!(
+        "\"{}\"",
+        value.replace('\\', "\\\\").replace('"', "\\\"")
+    )
 }
 
 /// Writes the aim marker into a rotation file, replacing an older marker.
@@ -560,5 +704,37 @@ mod tests {
         let again = upsert_aim(&once, AimMarker { x: 11, ..marker });
         assert_eq!(again.matches("aim_x").count(), 1);
         assert!(again.contains("aim_x = 11\n"));
+    }
+
+    #[test]
+    fn a_saved_file_loads_the_npc_guard() {
+        let mut config = starter();
+        config.guard.x = Some(12);
+        config.guard.y = Some(34);
+        config.guard.npc = Some(crate::aim::Rgb {
+            r: 10,
+            g: 20,
+            b: 30,
+        });
+        config.guard.player = Some(crate::aim::Rgb {
+            r: 200,
+            g: 30,
+            b: 30,
+        });
+        let loaded = parse(&to_toml(&config)).unwrap();
+        assert!(loaded.guard.enabled);
+        assert_eq!(loaded.guard.x, Some(12));
+        assert_eq!(loaded.guard.npc, config.guard.npc);
+        assert_eq!(loaded.guard.player, config.guard.player);
+        assert_eq!(loaded.builds[0].name, config.builds[0].name);
+        assert_eq!(loaded.builds[0].opener, config.builds[0].opener);
+    }
+
+    #[test]
+    fn the_example_file_leaves_the_guard_off() {
+        let config = parse(include_str!("../rotation.example.toml")).unwrap();
+        assert!(!config.guard.enabled);
+        assert!(config.guard.npc.is_none());
+        assert!(starter().guard.enabled);
     }
 }

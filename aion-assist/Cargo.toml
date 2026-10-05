@@ -12,6 +12,10 @@ publish = false
 # releases require the 2024 edition.
 serde = { version = "=1.0.219", features = ["derive"] }
 toml = "=0.8.23"
+# 0.29 stays on Rust 1.83. Newer eframe releases need a newer compiler.
+# The lockfile also pins transitive crates (ICU, wayland-protocols, image,
+# proc-macro-crate, url) so a newer resolver does not pull edition-2024 crates.
+eframe = "=0.29.1"
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.59", features = [

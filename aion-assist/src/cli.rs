@@ -17,6 +17,9 @@ pub enum Command {
     LearnAim {
         path: PathBuf,
     },
+    Gui {
+        path: PathBuf,
+    },
 }
 
 pub fn parse<I, S>(args: I) -> Result<Command, String>
@@ -34,6 +37,8 @@ where
     let mut help = false;
     let mut verbose = false;
     let mut learn_aim = false;
+    let mut ui = false;
+    let mut path_explicit = false;
     let mut horizon = None;
 
     while let Some(arg) = args.next() {
@@ -44,6 +49,7 @@ where
             "--dry-run" => dry_run = true,
             "--verbose" => verbose = true,
             "--learn-aim" => learn_aim = true,
+            "--ui" => ui = true,
             "--build" => {
                 build = Some(
                     args.next()
@@ -71,6 +77,7 @@ where
                 if path.is_some() {
                     return Err("only one rotation file can be passed".into());
                 }
+                path_explicit = true;
                 path = Some(PathBuf::from(other));
             }
         }
@@ -80,8 +87,11 @@ where
         return Ok(Command::Help);
     }
     let path = path.unwrap_or_else(|| PathBuf::from("rotation.toml"));
-    if learn_aim && (list || dry_run || horizon.is_some()) {
+    if learn_aim && (list || dry_run || horizon.is_some() || ui) {
         return Err("--learn-aim is used on its own".into());
+    }
+    if ui && (list || dry_run || horizon.is_some() || verbose || build.is_some()) {
+        return Err("--ui opens the window on its own".into());
     }
     if learn_aim {
         return Ok(Command::LearnAim { path });
@@ -91,6 +101,11 @@ where
     }
     if horizon.is_some() && !dry_run {
         return Err("--ms is only used with --dry-run".into());
+    }
+    let launch_window = ui
+        || (!path_explicit && !dry_run && !verbose && build.is_none() && horizon.is_none());
+    if launch_window {
+        return Ok(Command::Gui { path });
     }
     Ok(Command::Run {
         path,
@@ -106,9 +121,15 @@ pub fn help_text() -> &'static str {
 aion-assist — send a skill rotation to the focused window
 
 USAGE
+    aion-assist
+    aion-assist --ui [rotation.toml]
     aion-assist [OPTIONS] [rotation.toml]
 
+With no options, a window opens. Builds, the trigger, and the NPC check are
+edited there and saved into rotation.toml.
+
 OPTIONS
+    --ui             Open the window (this is also the default)
     --build <name>   Which build to run. Defaults to the one marked active.
     --dry-run        Print the timeline and send nothing
     --ms <n>         How much of the timeline --dry-run prints (default 10000)
@@ -118,12 +139,12 @@ OPTIONS
     -h, --help       Show this help
 
 The default file is rotation.toml in the current directory, or beside the
-executable. Copy rotation.example.toml to start a build. Each
-[[builds.skills]] block is one skill.
+executable. The window creates it from the example rotation the first time.
 
 Live sending runs on Windows. A hold trigger runs while you keep a button
-down. An aim trigger runs while the taught screen marker is visible. Keys
-are sent only to the window that is focused.
+down. An aim trigger runs while the taught screen marker is visible. When
+the NPC check is on, a second taught pixel has to match an NPC and not a
+player. Keys are sent only to the window that is focused.
 "
 }
 
@@ -168,6 +189,32 @@ mod tests {
             command,
             Command::LearnAim {
                 path: PathBuf::from("rotation.toml")
+            }
+        );
+    }
+
+    #[test]
+    fn no_args_opens_the_window() {
+        let command = parse(["aion-assist"]).unwrap();
+        assert_eq!(
+            command,
+            Command::Gui {
+                path: PathBuf::from("rotation.toml")
+            }
+        );
+    }
+
+    #[test]
+    fn a_path_on_its_own_still_runs() {
+        let command = parse(["aion-assist", "rotation.toml"]).unwrap();
+        assert_eq!(
+            command,
+            Command::Run {
+                path: PathBuf::from("rotation.toml"),
+                build: None,
+                dry_run: false,
+                horizon: Duration::from_secs(10),
+                verbose: false,
             }
         );
     }
