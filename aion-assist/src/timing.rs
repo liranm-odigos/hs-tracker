@@ -6,7 +6,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 /// Returns true when `should_stop` fires before the deadline.
-pub fn wait_until(deadline: Instant, should_stop: impl Fn() -> bool) -> bool {
+pub fn wait_until(deadline: Instant, mut should_stop: impl FnMut() -> bool) -> bool {
     loop {
         if should_stop() {
             return true;

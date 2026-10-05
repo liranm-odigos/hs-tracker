@@ -136,6 +136,11 @@ fn main_key(token: &str) -> Option<MainKey> {
         "grave" | "backquote" | "`" => Some((0xC0, false)),
         "numpadadd" | "num+" => Some((0x6B, false)),
         "numpadsub" | "num-" => Some((0x6D, false)),
+        "lbutton" | "lmb" | "mouse1" => Some((0x01, false)),
+        "rbutton" | "rmb" | "mouse2" => Some((0x02, false)),
+        "mbutton" | "mmb" | "mouse3" => Some((0x04, false)),
+        "mouse4" | "xbutton1" => Some((0x05, false)),
+        "mouse5" | "xbutton2" => Some((0x06, false)),
         _ => None,
     };
     if let Some((vk, extended)) = named {
@@ -187,6 +192,12 @@ fn main_key(token: &str) -> Option<MainKey> {
     None
 }
 
+impl KeyCombo {
+    pub fn is_mouse(&self) -> bool {
+        matches!(self.vk, 0x01 | 0x02 | 0x04 | 0x05 | 0x06)
+    }
+}
+
 impl fmt::Display for KeyCombo {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(&self.label)
@@ -232,5 +243,14 @@ mod tests {
         assert!(parse("left").unwrap().extended);
         assert!(!parse("space").unwrap().extended);
         assert_eq!(parse("numpad3").unwrap().vk, 0x63);
+    }
+
+    #[test]
+    fn parses_mouse_buttons() {
+        let right = parse("RButton").unwrap();
+        assert!(right.is_mouse());
+        assert_eq!(right.vk, 0x02);
+        assert_eq!(parse("Mouse4").unwrap().vk, 0x05);
+        assert!(!parse("1").unwrap().is_mouse());
     }
 }

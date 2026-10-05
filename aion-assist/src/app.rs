@@ -2,6 +2,8 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use crate::cli::{self, Command};
+#[cfg(windows)]
+use crate::config::Trigger;
 use crate::config::{self, AppConfig};
 use crate::rotation::{self, Build};
 
@@ -22,6 +24,11 @@ fn dispatch(command: Command) -> Result<Outcome, String> {
             let path = locate(&path)?;
             let config = config::load(&path)?;
             print_list(&path, &config);
+            Ok(Outcome::Done)
+        }
+        Command::LearnAim { path } => {
+            let path = locate(&path)?;
+            learn_aim(&path)?;
             Ok(Outcome::Done)
         }
         Command::Run {
@@ -78,21 +85,54 @@ fn print_list(path: &Path, config: &AppConfig) {
 #[cfg(windows)]
 fn start_live(config: &AppConfig, build: &Build, verbose: bool) -> Result<Outcome, String> {
     print_live_banner(config, build);
-    crate::send::run_live(
-        &config.toggle,
-        &config.cancel,
+    crate::send::run_live(crate::send::Session {
+        trigger: &config.trigger,
+        toggle: &config.toggle,
+        cancel: &config.cancel,
         build,
-        config.hold,
-        config.focus.as_deref(),
+        key_hold: config.hold,
+        focus: config.focus.as_deref(),
         verbose,
-    )?;
+    })?;
     Ok(Outcome::Done)
+}
+
+#[cfg(windows)]
+fn learn_aim(path: &Path) -> Result<(), String> {
+    let config = config::load(path)?;
+    println!("Aim at a monster until the aim marker is showing.");
+    println!("Show the cursor if it is hidden, and put it on that marker.");
+    println!(
+        "Press {} to save the spot under the cursor. Press {} to cancel.",
+        config.toggle, config.cancel
+    );
+    println!("Borderless windowed mode is required. Exclusive fullscreen hides the marker from this program.");
+    let marker = crate::send::learn_marker(&config.toggle, &config.cancel)?;
+    let text = std::fs::read_to_string(path)
+        .map_err(|err| format!("could not read {}: {err}", path.display()))?;
+    let updated = config::upsert_aim(&text, marker);
+    std::fs::write(path, &updated)
+        .map_err(|err| format!("could not write {}: {err}", path.display()))?;
+    println!(
+        "saved trigger = \"aim\" at {},{} color {} in {}",
+        marker.x,
+        marker.y,
+        marker.color,
+        path.display()
+    );
+    Ok(())
 }
 
 #[cfg(not(windows))]
 fn start_live(config: &AppConfig, build: &Build, verbose: bool) -> Result<Outcome, String> {
     let _ = (config, build, verbose);
     Err("live key sending is built for Windows. Re-run with --dry-run to preview the timeline on this machine.".into())
+}
+
+#[cfg(not(windows))]
+fn learn_aim(path: &Path) -> Result<(), String> {
+    let _ = path;
+    Err("teaching the aim marker is built for Windows. The rotation file is edited there, while you are aimed at a monster.".into())
 }
 
 #[cfg(windows)]
@@ -105,10 +145,20 @@ fn print_live_banner(config: &AppConfig, build: &Build) {
         }
         None => println!("sending keys to whatever window is focused"),
     }
-    println!(
-        "click the game, then press {} to start and stop, {} to quit",
-        config.toggle, config.cancel
-    );
+    match &config.trigger {
+        Trigger::Toggle => println!(
+            "click the game, then press {} to start and stop, {} to quit",
+            config.toggle, config.cancel
+        ),
+        Trigger::Hold(key) => println!(
+            "click the game, then hold {key}. The game still receives that button. {} quits.",
+            config.cancel
+        ),
+        Trigger::Aim(_) => println!(
+            "click the game, then aim at a monster. {} quits. Teach the marker again with --learn-aim.",
+            config.cancel
+        ),
+    }
 }
 
 fn print_dry_run(config: &AppConfig, build: &Build, horizon: Duration) {
@@ -117,6 +167,7 @@ fn print_dry_run(config: &AppConfig, build: &Build, horizon: Duration) {
         horizon.as_millis()
     );
     print_build_summary(config, build);
+    println!("{}", config.trigger_line());
     let start = std::time::Instant::now();
     let mut engine = rotation::Engine::new(build.clone(), start);
     for press in rotation::simulate(&mut engine, start, horizon) {

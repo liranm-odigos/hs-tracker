@@ -37,9 +37,43 @@ aion-assist --dry-run --ms 8000
 aion-assist --build sequence-example --dry-run
 ```
 
-Click the game, then press the toggle key (`F8` in the example) to start and stop. Press the cancel key (`F9`) to quit. The toggle is registered with Windows, so the game does not also receive it.
-
 `--dry-run` prints the timeline and sends nothing. It also runs on Linux, which is how the rotation clock is tested. Live sending is Windows only.
+
+## Add a rotation
+
+1. Copy `rotation.example.toml` to `rotation.toml` next to the executable.
+2. Set `gcd_ms` to your global cooldown.
+3. Give each skill its own `[[builds.skills]]` block. `key` is what the game has bound. `cooldown_ms` is that skill's cooldown. `priority` is the order: 0 is first.
+4. List the opening skills in `opener`, in the order you press them on a fresh pull.
+5. Mark the build you want with `active = true`. `--build name` selects another one. `--list` shows them.
+
+A second build is another `[[builds]]` block with its own skills. Cooldowns are counted from the moment a key is sent. The game is not read, so a wrong number presses too early or too late.
+
+Check the order before you send anything:
+
+```text
+aion-assist --dry-run --ms 8000
+```
+
+## Start when you aim at a monster
+
+The program cannot see a monster. It can watch one pixel of the marker the game draws while your reticle is on an enemy (the circle around it, or the target bar).
+
+1. In the game, set the reticle to hostile targets, and use borderless windowed mode. Exclusive fullscreen does not share that pixel.
+2. Aim at a monster so the marker is visible. Show the cursor, put it on the marker, and run:
+
+```text
+aion-assist --learn-aim
+```
+
+3. Press `F8`. That writes `trigger = "aim"` plus the pixel into `rotation.toml`.
+4. Run `aion-assist`. The rotation starts about 20 ms after that marker is visible, and stops about 40 ms after it disappears. `F9` quits.
+
+It cannot tell a monster from a player when both use the same marker. In a PvE area the marker you taught is the monster under the reticle.
+
+`trigger = "hold"` and `hold = "RButton"` is the other trigger: the rotation runs only while that button is down, and the game still receives the button. Use it when you want a button instead of the aim marker.
+
+`trigger = "toggle"` keeps the old behavior: `F8` starts and stops. Windows swallows that key, so the game does not also receive it.
 
 ## Rotation file
 

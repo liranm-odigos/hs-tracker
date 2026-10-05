@@ -14,6 +14,9 @@ pub enum Command {
         horizon: Duration,
         verbose: bool,
     },
+    LearnAim {
+        path: PathBuf,
+    },
 }
 
 pub fn parse<I, S>(args: I) -> Result<Command, String>
@@ -30,6 +33,7 @@ where
     let mut list = false;
     let mut help = false;
     let mut verbose = false;
+    let mut learn_aim = false;
     let mut horizon = None;
 
     while let Some(arg) = args.next() {
@@ -39,6 +43,7 @@ where
             "--list" => list = true,
             "--dry-run" => dry_run = true,
             "--verbose" => verbose = true,
+            "--learn-aim" => learn_aim = true,
             "--build" => {
                 build = Some(
                     args.next()
@@ -75,6 +80,12 @@ where
         return Ok(Command::Help);
     }
     let path = path.unwrap_or_else(|| PathBuf::from("rotation.toml"));
+    if learn_aim && (list || dry_run || horizon.is_some()) {
+        return Err("--learn-aim is used on its own".into());
+    }
+    if learn_aim {
+        return Ok(Command::LearnAim { path });
+    }
     if list {
         return Ok(Command::List { path });
     }
@@ -102,13 +113,16 @@ OPTIONS
     --dry-run        Print the timeline and send nothing
     --ms <n>         How much of the timeline --dry-run prints (default 10000)
     --list           Show the builds in the file
+    --learn-aim      Save the aim marker under the mouse into the rotation file
     --verbose        Print each skill as it is sent
     -h, --help       Show this help
 
 The default file is rotation.toml in the current directory, or beside the
-executable. Copy rotation.example.toml to start a build.
+executable. Copy rotation.example.toml to start a build. Each
+[[builds.skills]] block is one skill.
 
-Live sending runs on Windows. Press the toggle key to start and stop. Keys
+Live sending runs on Windows. A hold trigger runs while you keep a button
+down. An aim trigger runs while the taught screen marker is visible. Keys
 are sent only to the window that is focused.
 "
 }
@@ -145,5 +159,16 @@ mod tests {
     fn rejects_ms_without_a_dry_run() {
         let err = parse(["aion-assist", "--ms", "10"]).unwrap_err();
         assert!(err.contains("--dry-run"));
+    }
+
+    #[test]
+    fn parses_learn_aim() {
+        let command = parse(["aion-assist", "--learn-aim", "rotation.toml"]).unwrap();
+        assert_eq!(
+            command,
+            Command::LearnAim {
+                path: PathBuf::from("rotation.toml")
+            }
+        );
     }
 }

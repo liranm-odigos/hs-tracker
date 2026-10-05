@@ -4,6 +4,7 @@
 //! game running. On Windows, [`send`] turns the next skill into a scan-code
 //! key press aimed at the focused window.
 
+pub mod aim;
 mod app;
 pub mod cli;
 pub mod config;

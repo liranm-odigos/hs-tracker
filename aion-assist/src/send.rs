@@ -32,21 +32,29 @@ mod win {
     use std::thread::{self, JoinHandle};
     use std::time::Instant;
 
-    use windows_sys::Win32::Foundation::GetLastError;
+    use windows_sys::Win32::Foundation::{GetLastError, POINT};
+    use windows_sys::Win32::Graphics::Gdi::{GetDC, GetPixel, ReleaseDC, CLR_INVALID};
     use windows_sys::Win32::Media::{timeBeginPeriod, timeEndPeriod};
     use windows_sys::Win32::System::Console::SetConsoleCtrlHandler;
     use windows_sys::Win32::System::Threading::{
         GetCurrentThread, GetCurrentThreadId, SetThreadPriority, THREAD_PRIORITY_ABOVE_NORMAL,
     };
+    use windows_sys::Win32::UI::HiDpi::{
+        SetProcessDpiAwarenessContext, DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2,
+    };
     use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
-        MapVirtualKeyW, RegisterHotKey, SendInput, UnregisterHotKey, HOT_KEY_MODIFIERS, INPUT,
-        INPUT_0, INPUT_KEYBOARD, KEYBDINPUT, KEYEVENTF_EXTENDEDKEY, KEYEVENTF_KEYUP,
-        KEYEVENTF_SCANCODE, MAPVK_VK_TO_VSC, MOD_ALT, MOD_CONTROL, MOD_NOREPEAT, MOD_SHIFT,
-        VK_CONTROL, VK_MENU, VK_SHIFT,
+        GetAsyncKeyState, MapVirtualKeyW, RegisterHotKey, SendInput, UnregisterHotKey,
+        HOT_KEY_MODIFIERS, INPUT, INPUT_0, INPUT_KEYBOARD, KEYBDINPUT, KEYEVENTF_EXTENDEDKEY,
+        KEYEVENTF_KEYUP, KEYEVENTF_SCANCODE, MAPVK_VK_TO_VSC, MOD_ALT, MOD_CONTROL, MOD_NOREPEAT,
+        MOD_SHIFT, VK_CONTROL, VK_MENU, VK_SHIFT,
     };
     use windows_sys::Win32::UI::WindowsAndMessaging::{
-        GetForegroundWindow, GetMessageW, GetWindowTextW, PostThreadMessageW, WM_HOTKEY, WM_QUIT,
+        GetCursorPos, GetForegroundWindow, GetMessageW, GetWindowTextW, PostThreadMessageW,
+        WM_HOTKEY, WM_QUIT,
     };
+
+    use crate::aim::{Gate, Rgb};
+    use crate::config::{AimMarker, Trigger};
 
     use super::KeySender;
     use crate::keys::KeyCombo;
@@ -110,14 +118,49 @@ mod win {
         }
     }
 
-    pub fn run_live(
-        toggle: &KeyCombo,
-        cancel: &KeyCombo,
-        build: &crate::rotation::Build,
-        hold: std::time::Duration,
-        focus: Option<&str>,
-        verbose: bool,
-    ) -> Result<(), String> {
+    pub struct Session<'a> {
+        pub trigger: &'a Trigger,
+        pub toggle: &'a KeyCombo,
+        pub cancel: &'a KeyCombo,
+        pub build: &'a crate::rotation::Build,
+        pub key_hold: std::time::Duration,
+        pub focus: Option<&'a str>,
+        pub verbose: bool,
+    }
+
+    pub fn learn_marker(toggle: &KeyCombo, cancel: &KeyCombo) -> Result<AimMarker, String> {
+        if toggle.is_mouse() || cancel.is_mouse() {
+            return Err("the learn keys must be keyboard keys".into());
+        }
+        enable_dpi();
+        let screen = Screen::open()?;
+        loop {
+            if STOP.load(Ordering::Acquire) || key_held(cancel) {
+                return Err("aim marker was not saved".into());
+            }
+            if key_held(toggle) {
+                let mut point = POINT { x: 0, y: 0 };
+                if unsafe { GetCursorPos(&mut point) } == 0 {
+                    return Err("could not read the mouse position".into());
+                }
+                let color = screen.pixel(point.x, point.y).ok_or_else(|| {
+                    "could not read that pixel. Use borderless windowed mode and aim at a monster first.".to_string()
+                })?;
+                while key_held(toggle) {
+                    thread::sleep(std::time::Duration::from_millis(10));
+                }
+                return Ok(AimMarker {
+                    x: point.x,
+                    y: point.y,
+                    color,
+                    tolerance: 32,
+                });
+            }
+            thread::sleep(std::time::Duration::from_millis(10));
+        }
+    }
+
+    pub fn run_live(session: Session<'_>) -> Result<(), String> {
         STOP.store(false, Ordering::Release);
         let _timer = TimerResolution::acquire();
         let _console = ConsoleHandler::install();
@@ -125,31 +168,40 @@ mod win {
             SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_ABOVE_NORMAL);
         }
 
+        enable_dpi();
         let running = Arc::new(AtomicBool::new(false));
-        let hotkeys = Hotkeys::install(toggle, cancel, Arc::clone(&running))?;
+        let toggle_key = match session.trigger {
+            Trigger::Toggle => Some(session.toggle.clone()),
+            Trigger::Hold(_) | Trigger::Aim(_) => None,
+        };
+        let hotkeys = Hotkeys::install(toggle_key, session.cancel, Arc::clone(&running))?;
+        let screen = Screen::open()?;
         let mut sender = WindowsSender;
-        let mut engine = Engine::new(build.clone(), Instant::now());
-        let mut active = false;
+        let mut engine = Engine::new(session.build.clone(), Instant::now());
+        let mut gate = Gate::new();
+        let mut engaged = false;
 
         let stop = || STOP.load(Ordering::Acquire);
         while !stop() {
-            let want = running.load(Ordering::Acquire);
-            if want != active {
-                active = want;
-                if active {
+            let now = Instant::now();
+            let focused = foreground_matches(session.focus);
+            let hit = trigger_hit(session.trigger, &running, &screen, focused);
+            let want = match session.trigger {
+                Trigger::Toggle => hit,
+                Trigger::Hold(_) | Trigger::Aim(_) => gate.update(hit, now),
+            };
+            if want != engaged {
+                engaged = want;
+                if engaged {
+                    engine.begin_window(now);
                     println!("rotation on — {}", engine.build().name);
                 } else {
                     println!("rotation off");
                 }
             }
-            if !active {
-                if wait_until(Instant::now() + std::time::Duration::from_millis(5), stop) {
-                    break;
-                }
-                continue;
-            }
-            if !foreground_matches(focus) {
-                if wait_until(Instant::now() + std::time::Duration::from_millis(20), stop) {
+            let send_now = engaged && focused;
+            if !send_now {
+                if wait_until(now + std::time::Duration::from_millis(5), stop) {
                     break;
                 }
                 continue;
@@ -164,7 +216,25 @@ mod win {
                     } else {
                         until.min(now + std::time::Duration::from_millis(5))
                     };
-                    wait_until(slice, || stop() || !running.load(Ordering::Acquire));
+                    let running = &running;
+                    let screen = &screen;
+                    let trigger = session.trigger;
+                    let focus = session.focus;
+                    let gate_ref = &mut gate;
+                    wait_until(slice, || {
+                        if stop() {
+                            return true;
+                        }
+                        let focused = foreground_matches(focus);
+                        let hit = trigger_hit(trigger, running, screen, focused);
+                        let want = match trigger {
+                            Trigger::Toggle => hit,
+                            Trigger::Hold(_) | Trigger::Aim(_) => {
+                                gate_ref.update(hit, Instant::now())
+                            }
+                        };
+                        !want || !focused
+                    });
                     continue;
                 }
             };
@@ -174,7 +244,9 @@ mod win {
             if let Err(err) = sender.key_down(&combo) {
                 eprintln!("aion-assist: {err}");
                 let _ = sender.key_up(&combo);
-                running.store(false, Ordering::Release);
+                if matches!(session.trigger, Trigger::Toggle) {
+                    running.store(false, Ordering::Release);
+                }
                 continue;
             }
             let mut held = Release {
@@ -182,14 +254,28 @@ mod win {
                 combo: &combo,
                 armed: true,
             };
-            wait_until(pressed_at + hold, || {
-                stop() || !running.load(Ordering::Acquire)
+            let running = &running;
+            let screen = &screen;
+            let trigger = session.trigger;
+            let focus = session.focus;
+            let gate_ref = &mut gate;
+            wait_until(pressed_at + session.key_hold, || {
+                if stop() {
+                    return true;
+                }
+                let focused = foreground_matches(focus);
+                let hit = trigger_hit(trigger, running, screen, focused);
+                let want = match trigger {
+                    Trigger::Toggle => hit,
+                    Trigger::Hold(_) | Trigger::Aim(_) => gate_ref.update(hit, Instant::now()),
+                };
+                !want || !focused
             });
             // Release before the cooldown is recorded so the next press cannot
             // overlap this one, and before any logging which can block.
             held.release();
             engine.commit(index, pressed_at);
-            if verbose {
+            if session.verbose {
                 let skill = &engine.build().skills[index];
                 println!("{}  [{}]", skill.name, skill.key);
             }
@@ -231,26 +317,26 @@ mod win {
 
     impl Hotkeys {
         fn install(
-            toggle: &KeyCombo,
+            toggle: Option<KeyCombo>,
             cancel: &KeyCombo,
             running: Arc<AtomicBool>,
         ) -> Result<Self, String> {
-            let toggle = toggle.clone();
             let cancel = cancel.clone();
+            let has_toggle = toggle.is_some();
             let (tx, rx) = std::sync::mpsc::channel();
             let handle = thread::spawn(move || {
                 let thread_id = unsafe { GetCurrentThreadId() };
-                let registered = unsafe { register(&toggle, &cancel) };
+                let registered = unsafe { register(toggle.as_ref(), &cancel) };
                 let ready = registered.is_ok();
                 if tx.send((thread_id, registered)).is_err() {
                     if ready {
-                        unsafe { release_hotkeys() }
+                        unsafe { release_hotkeys(has_toggle) }
                     }
                     return;
                 }
                 if ready {
                     message_loop(running);
-                    unsafe { release_hotkeys() }
+                    unsafe { release_hotkeys(has_toggle) }
                 }
             });
 
@@ -281,20 +367,26 @@ mod win {
         }
     }
 
-    unsafe fn register(toggle: &KeyCombo, cancel: &KeyCombo) -> Result<(), String> {
-        if RegisterHotKey(std::ptr::null_mut(), 1, modifiers(toggle), toggle.vk as u32) == 0 {
-            return Err(hotkey_error("toggle", toggle));
+    unsafe fn register(toggle: Option<&KeyCombo>, cancel: &KeyCombo) -> Result<(), String> {
+        if let Some(toggle) = toggle {
+            if RegisterHotKey(std::ptr::null_mut(), 1, modifiers(toggle), toggle.vk as u32) == 0 {
+                return Err(hotkey_error("toggle", toggle));
+            }
         }
         if RegisterHotKey(std::ptr::null_mut(), 2, modifiers(cancel), cancel.vk as u32) == 0 {
             let err = hotkey_error("cancel", cancel);
-            UnregisterHotKey(std::ptr::null_mut(), 1);
+            if toggle.is_some() {
+                UnregisterHotKey(std::ptr::null_mut(), 1);
+            }
             return Err(err);
         }
         Ok(())
     }
 
-    unsafe fn release_hotkeys() {
-        UnregisterHotKey(std::ptr::null_mut(), 1);
+    unsafe fn release_hotkeys(toggle: bool) {
+        if toggle {
+            UnregisterHotKey(std::ptr::null_mut(), 1);
+        }
         UnregisterHotKey(std::ptr::null_mut(), 2);
     }
 
@@ -435,10 +527,87 @@ mod win {
             },
         }
     }
+
+    fn trigger_hit(
+        trigger: &Trigger,
+        running: &AtomicBool,
+        screen: &Screen,
+        focused: bool,
+    ) -> bool {
+        match trigger {
+            Trigger::Toggle => running.load(Ordering::Acquire),
+            Trigger::Hold(key) => key_held(key),
+            Trigger::Aim(marker) => {
+                focused
+                    && screen
+                        .pixel(marker.x, marker.y)
+                        .is_some_and(|color| color.near(marker.color, marker.tolerance))
+            }
+        }
+    }
+
+    fn key_held(combo: &KeyCombo) -> bool {
+        if combo.shift && !async_down(VK_SHIFT) {
+            return false;
+        }
+        if combo.ctrl && !async_down(VK_CONTROL) {
+            return false;
+        }
+        if combo.alt && !async_down(VK_MENU) {
+            return false;
+        }
+        async_down(combo.vk)
+    }
+
+    fn async_down(vk: u16) -> bool {
+        unsafe { GetAsyncKeyState(i32::from(vk)) < 0 }
+    }
+
+    fn enable_dpi() {
+        unsafe {
+            SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+        }
+    }
+
+    struct Screen {
+        dc: *mut core::ffi::c_void,
+    }
+
+    impl Screen {
+        fn open() -> Result<Self, String> {
+            let dc = unsafe { GetDC(std::ptr::null_mut()) };
+            if dc.is_null() {
+                Err("could not read the screen".into())
+            } else {
+                Ok(Self { dc })
+            }
+        }
+
+        fn pixel(&self, x: i32, y: i32) -> Option<Rgb> {
+            let color = unsafe { GetPixel(self.dc, x, y) };
+            if color == CLR_INVALID {
+                None
+            } else {
+                Some(Rgb {
+                    r: (color & 0xFF) as u8,
+                    g: ((color >> 8) & 0xFF) as u8,
+                    b: ((color >> 16) & 0xFF) as u8,
+                })
+            }
+        }
+    }
+
+    impl Drop for Screen {
+        fn drop(&mut self) {
+            unsafe {
+                ReleaseDC(std::ptr::null_mut(), self.dc);
+            }
+        }
+    }
 }
 
 #[cfg(windows)]
-pub use win::run_live;
+pub use win::{learn_marker, run_live, Session};
 
 #[cfg(test)]
 mod tests {

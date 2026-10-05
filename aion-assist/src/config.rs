@@ -7,6 +7,7 @@ use std::time::Duration;
 
 use serde::Deserialize;
 
+use crate::aim::{self, Rgb};
 use crate::keys::{self, KeyCombo};
 use crate::rotation::{Build, Mode, Skill};
 
@@ -18,12 +19,41 @@ const MAX_CHARGES: u32 = 20;
 
 #[derive(Debug)]
 pub struct AppConfig {
+    pub trigger: Trigger,
     pub toggle: KeyCombo,
     pub cancel: KeyCombo,
     pub hold: Duration,
     pub focus: Option<String>,
     pub min_gap_raised: bool,
     pub builds: Vec<Build>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Trigger {
+    Toggle,
+    Hold(KeyCombo),
+    Aim(AimMarker),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct AimMarker {
+    pub x: i32,
+    pub y: i32,
+    pub color: Rgb,
+    pub tolerance: u8,
+}
+
+impl AppConfig {
+    pub fn trigger_line(&self) -> String {
+        match &self.trigger {
+            Trigger::Toggle => format!("trigger: press {} to start and stop", self.toggle),
+            Trigger::Hold(key) => format!("trigger: hold {key} to run the rotation"),
+            Trigger::Aim(marker) => format!(
+                "trigger: aim marker at {},{} color {}",
+                marker.x, marker.y, marker.color
+            ),
+        }
+    }
 }
 
 impl AppConfig {
@@ -73,14 +103,18 @@ fn from_raw(raw: RawFile) -> Result<AppConfig, String> {
     };
     let toggle = keys::parse(&raw.toggle).map_err(|err| format!("toggle: {err}"))?;
     let cancel = keys::parse(&raw.cancel).map_err(|err| format!("cancel: {err}"))?;
-    if toggle.label.eq_ignore_ascii_case(&cancel.label)
-        && toggle.vk == cancel.vk
-        && toggle.shift == cancel.shift
-        && toggle.ctrl == cancel.ctrl
-        && toggle.alt == cancel.alt
-    {
+    if toggle.is_mouse() {
+        return Err(
+            "toggle must be a keyboard key. A mouse button belongs on hold = \"RButton\".".into(),
+        );
+    }
+    if cancel.is_mouse() {
+        return Err("cancel must be a keyboard key".into());
+    }
+    if same_key(&toggle, &cancel) {
         return Err("toggle and cancel are the same key".into());
     }
+    let trigger = trigger_from_raw(&raw, &cancel)?;
 
     let mut names = Vec::new();
     let mut builds = Vec::with_capacity(raw.builds.len());
@@ -105,6 +139,7 @@ fn from_raw(raw: RawFile) -> Result<AppConfig, String> {
     });
 
     Ok(AppConfig {
+        trigger,
         toggle,
         cancel,
         hold: Duration::from_millis(hold_ms),
@@ -151,6 +186,12 @@ fn build_from_raw(raw: RawBuild, min_gap: Duration) -> Result<Build, String> {
         }
         let key =
             keys::parse(&skill.key).map_err(|err| format!("skill \"{}\": {err}", skill.name))?;
+        if key.is_mouse() {
+            return Err(format!(
+                "skill \"{}\" key \"{}\" is a mouse button. Use it as the hold trigger, not as a skill.",
+                skill.name, key
+            ));
+        }
         skills.push(Skill {
             name: skill.name.clone(),
             key,
@@ -228,6 +269,18 @@ fn default_charges() -> u32 {
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct RawFile {
+    #[serde(default = "default_trigger")]
+    trigger: String,
+    #[serde(default)]
+    hold: Option<String>,
+    #[serde(default)]
+    aim_x: Option<i64>,
+    #[serde(default)]
+    aim_y: Option<i64>,
+    #[serde(default)]
+    aim_color: Option<String>,
+    #[serde(default)]
+    aim_tolerance: Option<u64>,
     toggle: String,
     cancel: String,
     #[serde(default = "default_hold")]
@@ -237,6 +290,112 @@ struct RawFile {
     #[serde(default)]
     focus: Option<String>,
     builds: Vec<RawBuild>,
+}
+
+fn default_trigger() -> String {
+    "toggle".into()
+}
+
+fn same_key(left: &KeyCombo, right: &KeyCombo) -> bool {
+    left.vk == right.vk
+        && left.shift == right.shift
+        && left.ctrl == right.ctrl
+        && left.alt == right.alt
+}
+
+fn trigger_from_raw(raw: &RawFile, cancel: &KeyCombo) -> Result<Trigger, String> {
+    match raw.trigger.to_ascii_lowercase().as_str() {
+        "toggle" => Ok(Trigger::Toggle),
+        "hold" => {
+            let name = raw.hold.as_deref().ok_or_else(|| {
+                "trigger = \"hold\" needs hold = \"RButton\" (or whichever button you keep down)"
+                    .to_string()
+            })?;
+            let key = keys::parse(name).map_err(|err| format!("hold: {err}"))?;
+            if same_key(&key, cancel) {
+                return Err("hold and cancel are the same key".into());
+            }
+            Ok(Trigger::Hold(key))
+        }
+        "aim" => {
+            let x = raw.aim_x.ok_or_else(|| {
+                "trigger = \"aim\" needs aim_x, aim_y, and aim_color. Run aion-assist --learn-aim while aiming at a monster.".to_string()
+            })?;
+            let y = raw.aim_y.ok_or_else(|| {
+                "trigger = \"aim\" needs aim_y. Run aion-assist --learn-aim while aiming at a monster.".to_string()
+            })?;
+            let color = raw.aim_color.as_deref().ok_or_else(|| {
+                "trigger = \"aim\" needs aim_color. Run aion-assist --learn-aim while aiming at a monster.".to_string()
+            })?;
+            let tolerance = match raw.aim_tolerance {
+                None => 32,
+                Some(value) if value <= 255 => value as u8,
+                Some(value) => {
+                    return Err(format!("aim_tolerance is {value}; the maximum is 255"));
+                }
+            };
+            Ok(Trigger::Aim(AimMarker {
+                x: screen_coord(x, "aim_x")?,
+                y: screen_coord(y, "aim_y")?,
+                color: aim::parse_color(color)?,
+                tolerance,
+            }))
+        }
+        other => Err(format!(
+            "trigger \"{other}\" is unknown (use toggle, hold, or aim)"
+        )),
+    }
+}
+
+fn screen_coord(value: i64, what: &str) -> Result<i32, String> {
+    i32::try_from(value).map_err(|_| format!("{what} is out of range"))
+}
+
+/// Writes the aim marker into a rotation file, replacing an older marker.
+pub fn upsert_aim(text: &str, marker: AimMarker) -> String {
+    let lines = [
+        ("trigger", "trigger = \"aim\"".to_string()),
+        ("aim_x", format!("aim_x = {}", marker.x)),
+        ("aim_y", format!("aim_y = {}", marker.y)),
+        ("aim_color", format!("aim_color = \"{}\"", marker.color)),
+        (
+            "aim_tolerance",
+            format!("aim_tolerance = {}", marker.tolerance),
+        ),
+    ];
+    let mut found = [false; 5];
+    let mut out = String::new();
+    for line in text.lines() {
+        let mut replaced = false;
+        for (index, (key, value)) in lines.iter().enumerate() {
+            if line_sets(line, key) {
+                out.push_str(value);
+                out.push('\n');
+                found[index] = true;
+                replaced = true;
+                break;
+            }
+        }
+        if !replaced {
+            out.push_str(line);
+            out.push('\n');
+        }
+    }
+    for (index, (_, value)) in lines.iter().enumerate() {
+        if !found[index] {
+            out.push_str(value);
+            out.push('\n');
+        }
+    }
+    out
+}
+
+fn line_sets(line: &str, key: &str) -> bool {
+    let trimmed = line.trim();
+    let Some(rest) = trimmed.strip_prefix(key) else {
+        return false;
+    };
+    rest.trim_start().starts_with('=')
 }
 
 #[derive(Debug, Deserialize)]
@@ -336,5 +495,70 @@ mod tests {
             cooldown_ms = 1000
         "#;
         assert!(parse(opener).unwrap_err().contains("Missing"));
+    }
+
+    #[test]
+    fn hold_and_aim_triggers_parse() {
+        let hold = r#"
+            toggle = "F8"
+            cancel = "F9"
+            trigger = "hold"
+            hold = "RButton"
+            [[builds]]
+            name = "x"
+            mode = "priority"
+            gcd_ms = 1000
+            [[builds.skills]]
+            name = "Only"
+            key = "1"
+            cooldown_ms = 1000
+        "#;
+        let config = parse(hold).unwrap();
+        match config.trigger {
+            Trigger::Hold(key) => assert_eq!(key.vk, 0x02),
+            other => panic!("expected hold, got {other:?}"),
+        }
+
+        let aim = r#"
+            toggle = "F8"
+            cancel = "F9"
+            trigger = "aim"
+            aim_x = 960
+            aim_y = 140
+            aim_color = "F2F2F0"
+            [[builds]]
+            name = "x"
+            mode = "priority"
+            gcd_ms = 1000
+            [[builds.skills]]
+            name = "Only"
+            key = "1"
+            cooldown_ms = 1000
+        "#;
+        let config = parse(aim).unwrap();
+        match config.trigger {
+            Trigger::Aim(marker) => {
+                assert_eq!(marker.x, 960);
+                assert_eq!(marker.y, 140);
+                assert_eq!(marker.tolerance, 32);
+            }
+            other => panic!("expected aim, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn upsert_aim_replaces_an_existing_marker() {
+        let marker = AimMarker {
+            x: 10,
+            y: 20,
+            color: crate::aim::Rgb { r: 1, g: 2, b: 3 },
+            tolerance: 32,
+        };
+        let once = upsert_aim("toggle = \"F8\"\n# trigger = \"leave me\"\n", marker);
+        assert!(once.contains("trigger = \"aim\"\n"));
+        assert!(once.contains("# trigger = \"leave me\"\n"));
+        let again = upsert_aim(&once, AimMarker { x: 11, ..marker });
+        assert_eq!(again.matches("aim_x").count(), 1);
+        assert!(again.contains("aim_x = 11\n"));
     }
 }

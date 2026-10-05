@@ -94,6 +94,10 @@ impl Charges {
             self.next = Some(now + self.recharge);
         }
     }
+
+    fn is_full(&self) -> bool {
+        self.available == self.max && self.next.is_none()
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -140,6 +144,24 @@ impl Engine {
 
     pub fn build(&self) -> &Build {
         &self.build
+    }
+
+    /// Start a new pull. The opener plays again when every opener skill is
+    /// ready. If one is still on cooldown, the priority or sequence list runs
+    /// instead of waiting out that cooldown.
+    pub fn begin_window(&mut self, now: Instant) {
+        self.refresh(now);
+        let opener_ready = self
+            .build
+            .opener
+            .iter()
+            .all(|&index| self.charges[index].is_full());
+        self.opener_pos = if opener_ready {
+            0
+        } else {
+            self.build.opener.len()
+        };
+        self.sequence_pos = 0;
     }
 
     pub fn poll(&mut self, now: Instant) -> Step {
@@ -449,5 +471,36 @@ mod tests {
         assert_eq!(at(&presses, 1), (10, 0));
         assert_eq!(at(&presses, 2), (1000, 0));
         assert!(presses.get(3).is_none());
+    }
+
+    #[test]
+    fn a_new_pull_replays_the_opener_only_when_it_is_ready() {
+        let build = Build {
+            name: "pull".into(),
+            mode: Mode::Priority,
+            gcd: Duration::from_millis(1000),
+            min_gap: Duration::from_millis(10),
+            opener: vec![0],
+            skills: vec![
+                skill("Opener", "1", 5000, 1, false),
+                skill("Filler", "2", 0, 2, false),
+            ],
+            active: false,
+        };
+        let start = Instant::now();
+        let mut engine = Engine::new(build, start);
+        engine.commit(0, start);
+
+        engine.begin_window(start + Duration::from_millis(1000));
+        assert_eq!(
+            engine.poll(start + Duration::from_millis(1000)),
+            Step::Press { index: 1 }
+        );
+
+        engine.begin_window(start + Duration::from_millis(5000));
+        assert_eq!(
+            engine.poll(start + Duration::from_millis(5000)),
+            Step::Press { index: 0 }
+        );
     }
 }

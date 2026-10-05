@@ -1,14 +1,19 @@
-# Copy this file to rotation.toml and replace the names, keys, and times
-# with the build you play. Cooldowns are tracked from the moment a key is
-# sent. The game is not read, so a number that does not match the skill
-# will press too early or too late.
+# Copy this file to rotation.toml.
 #
-# priority: lower number wins. Off-GCD skills can fire during the global
-# cooldown, including between opener steps.
-# sequence: each skill waits for its own turn, in the order listed.
-# charges: how many times the skill can be sent before cooldown_ms has to
-# refill one charge.
+# Add a skill by pasting another [[builds.skills]] block and editing the
+# name, key, and cooldown. Lower priority numbers go first. off_gcd skills
+# can fire during the global cooldown. The opener plays at the start of a
+# pull, when those skills are ready.
+#
+# trigger:
+#   toggle  press F8 to start and stop
+#   hold    run only while `hold` is down (the game still sees that button)
+#   aim     run only while the taught aim marker is on screen
+#           teach it with: aion-assist --learn-aim
+#           aim at a monster, put the cursor on the marker, press F8
 
+trigger = "hold"
+hold = "RButton"
 toggle = "F8"
 cancel = "F9"
 key_hold_ms = 15
